@@ -36,7 +36,7 @@
 ;; (define-rest-page ("/home" jim james)
 ;; and concat... ??
 
-(define-syntax define-rest-page
+(define-syntax define-rest-call
   (syntax-rules ()
     ((_ ((vars ...) restexpr) body . args)
      (let* ((pathexpr (irregex-replace/all "[:][^/]+" restexpr "[^/]+"))
