@@ -113,6 +113,8 @@
 (define (sparql-variable str)
   (string->symbol (conc "?" (->string str))))
 
+;; un-sparql-variable
+
 (define (s-triple trip)
   (match-let (((a b c) trip))
     (format #f "~A ~A ~A."
@@ -168,23 +170,6 @@
   (match-lambda 
     ((s p o)
      (format #f "~A ~A ~A .~%" s p o))))
-
-;;  '(*top*
-;;    (*namespaces* (foaf "http://foaf.org#")
-;;                  (owl "http://owl.com/"))
-;;    (*triples*
-;;     (foaf:cake owl:likes foaf:icing)))
-;; (define (full-triples triples)
-;;  (let ((namespaces (assoc-val '*namespaces* (cdr triples)))
-;;	(triples (assoc-val '*triples* (cdr triples))))
-
-(define write-triple
-  (match-lambda 
-    ((s p o)
-     (format-triple (map reify (list s p o))))))
-
-(define (write-triples triples)
-  (apply conc (map write-triple triples)))
 
 (define (register-namespace name namespace)
   (*namespaces* (cons (list name namespace) (*namespaces*))))

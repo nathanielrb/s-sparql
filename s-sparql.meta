@@ -1,0 +1,21 @@
+(
+; Your egg's license:
+(license "BSD")
+
+; Pick one from the list of categories (see below) for your egg and enter it
+; here.
+(category web)
+
+; A list of eggs mpeg3 depends on.  If none, you can omit this declaration
+; altogether. `depends' is an alias to `needs'.
+; Notice that you should NOT put CHICKEN units (e.g., srfi-1, srfi-13
+; and many others) in `needs' or in `depends'.
+(needs srfi-13 awful http-client intarweb uri-common medea matchable irregex)
+
+; A list of eggs required for TESTING ONLY.  See the `Tests' section.
+; Just like `needs' and `depends', `test-depends' should NOT contain
+; CHICKEN units.
+(test-depends test)
+
+(author "Nathaniel Rudavsky-Brody")
+(synopsis "Support functions for building RDF webservices."))
