@@ -5,7 +5,11 @@
 ;;   `(p ($path 'type)))
 ;;     ...)
 
-(use awful medea irregex srfi-13)
+(module s-sparql-rest *
+
+(import chicken scheme extras data-structures srfi-1) 
+
+(use awful spiffy spiffy-request-vars http-client intarweb medea irregex srfi-13)
 
 (define (rest-indexes parts)
   (let rec ((n 0)
@@ -38,6 +42,7 @@
 
 (define-syntax define-rest-call
   (syntax-rules ()
+    
     ((_ ((vars ...) restexpr) body . args)
      (let* ((pathexpr (irregex-replace/all "[:][^/]+" restexpr "[^/]+"))
 	    (rest-parts (irregex-split "/" restexpr))
@@ -54,7 +59,14 @@
 	       (awful-response-headers '((content-type "application/json")))
 	       (json->string (body)))))
          no-template: #t
-	 . args)))))
+	 . args)))
+((_ pathexpr body . args)
+     (define-page pathexpr
+       (lambda ()
+         (awful-response-headers '((content-type "application/json")))
+         (json->string (body)))
+       no-template: #t
+       . args))))
 
 (define-syntax define-rest-page-fn
   (syntax-rules ()
@@ -74,3 +86,12 @@
 	     (json->string (body))))
          no-template: #t
 	 . args)))))
+
+(define (read-request-json)
+  (let* ((headers (request-headers (current-request)))
+	 (content-length (header-value 'content-length headers))
+	 (body (read-string content-length (request-port (current-request)))))
+    (read-json body)))
+
+)
+
