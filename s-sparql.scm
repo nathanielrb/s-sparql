@@ -18,7 +18,7 @@
 ;; what about Docker?
 (define *sparql-endpoint*
   (make-parameter
-   (or (get-environment-variable "SPARQL_ENDPOINT")
+   (or (get-environment-variable "MU_SPARQL_ENDPOINT")
        "http://127.0.0.1:8890/sparql")))
 
 (define *print-queries?* (make-parameter #t))
@@ -116,11 +116,13 @@
 ;; un-sparql-variable
 
 (define (s-triple trip)
-  (match-let (((a b c) trip))
-    (format #f "~A ~A ~A."
-            (reify a)
-            (reify b)
-            (reify c))))
+  (if (string? trip)
+      trip
+      (match-let (((a b c) trip))
+        (format #f "~A ~A ~A."
+                (reify a)
+                (reify b)
+                (reify c)))))
 
 (define (triple a b c)
   (s-triple (list a b c)))
