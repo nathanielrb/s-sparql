@@ -2,7 +2,7 @@
 
 (import chicken scheme extras data-structures srfi-1) 
 
-(use srfi-13 awful http-client intarweb uri-common medea matchable irregex)
+(use srfi-13 http-client intarweb uri-common medea matchable irregex)
 
 (require-extension srfi-13)
 
