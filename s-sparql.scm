@@ -503,11 +503,4 @@
        
 (define-namespace mu "http://mu.semte.ch/vocabularies/core/")
 
-;; what about Docker??
-(debug-file
- (or (get-environment-variable "LOG_FILE")
-     "./debug.log"))
-
-
-
 )
