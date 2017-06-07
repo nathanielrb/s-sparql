@@ -10,7 +10,7 @@
 ; altogether. `depends' is an alias to `needs'.
 ; Notice that you should NOT put CHICKEN units (e.g., srfi-1, srfi-13
 ; and many others) in `needs' or in `depends'.
-(needs srfi-13 pool http-client intarweb uri-common medea matchable irregex)
+(needs pool http-client intarweb uri-common medea matchable irregex)
 
 ; A list of eggs required for TESTING ONLY.  See the `Tests' section.
 ; Just like `needs' and `depends', `test-depends' should NOT contain
