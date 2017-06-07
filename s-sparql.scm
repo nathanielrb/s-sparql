@@ -26,7 +26,7 @@
 (define *namespaces* (make-parameter '()))
 
 (define *namespace-definitions*
-  (or (get-environment-variable "NAMESPACES")
+  (or (get-environment-variable "MU_NAMESPACES")
       "skos: http://www.w3.org/2004/02/skos/core#"))
 
 (define-syntax hit-property-cache
@@ -34,6 +34,14 @@
     ((hit-property-cache sym prop body)
      (or (get sym prop)
          (put! sym prop body)))))
+
+(define-syntax hit-hashed-cache
+  (syntax-rules ()
+    ((hit-hashed-cache cache key body)
+     (or (hash-table-ref/default cache key #f)
+         (begin
+           (hash-table-set! cache key body)
+           (hash-table-ref cache key))))))
     
 ;; to do : use this parameter in reify!
 (define *expand-namespaces?* (make-parameter #t))
@@ -141,7 +149,7 @@
   (string-join (map bracketed statements) " UNION "))
 
 (define (s-optional statement)
-  (format #f "OPTIONAL { ~A }" statement))
+  (format #f "~%OPTIONAL { ~A }" statement))
 
 (define (s-filter statement filter)
   (format #f "~A FILTER (~A)" statement filter))
@@ -181,6 +189,11 @@
 
 (define (expand-namespace ns-pair)
   (read-uri (format #f "~A~A" (lookup-namespace (car ns-pair)) (cadr ns-pair))))
+
+(define (expand-namespace ns-pair)
+  (let ((pair (string-split (->string ns-pair) ":")))
+    (conc (lookup-namespace (string->symbol (car pair)))
+          (cadr pair))))
 
 (define (write-expand-namespace ns-pair)
   (format #f "~A~A" (lookup-namespace (car ns-pair)) (cadr ns-pair)))
