@@ -14,14 +14,12 @@
 
 (define *default-graph*
   (make-parameter
-   (or (read-uri (get-environment-variable "MU_DEFAULT_GRAPH"))
-       '<http://mu.semte.ch/core/>)))
+   '<http://mu.semte.ch/application>))
 
 ;; what about Docker?
 (define *sparql-endpoint*
   (make-parameter
-   (or (get-environment-variable "MU_SPARQL_ENDPOINT")
-       "http://127.0.0.1:8890/sparql")))
+   "http://127.0.0.1:8890/sparql"))
 
 (define *print-queries?* (make-parameter #t))
 
@@ -54,10 +52,6 @@
 (define (sconc #!rest syms)
   (string->symbol 
    (apply conc (map ->string syms))))
-
-;;useless I think
-(define (assoc-get field object)
-  (cdr (assoc field object)))
 
 (define (last-substr? str substr)
   (substring=? str substr
@@ -107,15 +101,7 @@
   (and x (string->number x)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; rdf
-
-(define (reify x)
-    (cond ((string? x) (conc "\"" x "\""))
-	  ((keyword? x) (keyword->string x))
-	  ((number? x) x)
-	  ;;((list? x) (apply conc x))
-          ((symbol? x) (symbol->string x)) ))
-	  ;; ((namespace-pair? x) (expand-namespace x))))
+;; data types
 
 (define (new-sparql-variable)
   (string->symbol (conc "?" (->string (gensym)))))
@@ -123,47 +109,11 @@
 (define (sparql-variable str)
   (string->symbol (conc "?" (->string str))))
 
-;; un-sparql-variable
+(define (un-sparql-variable var)
+  (string->symbol (substring (symbol->string var) 1)))
 
-(define (s-triple trip)
-  (if (string? trip)
-      trip
-      (match-let (((a b c) trip))
-        (format #f "~A ~A ~A."
-                (reify a)
-                (reify b)
-                (reify c)))))
-
-(define (triple a b c)
-  (s-triple (list a b c)))
-
-(define (bracketed statement)
-  (format #f "{~A}" statement))         
-
-(define (graph-statement graph statements)
-  (if graph
-      (format #f "GRAPH ~A { ~A } ."
-              (reify graph)
-              statements)
-      statements))
-
-(define (union statements)
-  (string-join (map bracketed statements) " UNION "))
-
-(define (s-optional statement)
-  (format #f "~%OPTIONAL { ~A }" statement))
-
-(define (s-filter statement filter)
-  (format #f "~A FILTER (~A)" statement filter))
-
-(define (s-bind as var)
-  (format #f "BIND ~A as ~A" as var))
-
-(define (triples trips)
-  (string-join trips "\n"))
-
-(define (s-triples trips)
-  (string-join (map s-triple trips) "\n"))
+(define (sparql-variable->string var)
+  (substring (symbol->string var) 1))
 
 (define  (expand-uri x)
   (if (pair? x)
@@ -178,19 +128,11 @@
   (cond ((symbol? x) (write-uri x))
 	(else x)))
 
-(define format-triple
-  (match-lambda 
-    ((s p o)
-     (format #f "~A ~A ~A .~%" s p o))))
-
 (define (register-namespace name namespace)
   (*namespaces* (cons (list name namespace) (*namespaces*))))
 
 (define (lookup-namespace name)
   (car-when (alist-ref name (*namespaces*))))
-
-;; (define (expand-namespace ns-pair)
-;;   (read-uri (format #f "~A~A" (lookup-namespace (car ns-pair)) (cadr ns-pair))))
 
 (define (s-iri? elt)
   (let ((s (->string elt)))
@@ -212,13 +154,6 @@
         (conc (lookup-namespace (string->symbol (car pair)))
               (cadr pair)))))
 
-;; (define (write-expand-namespace ns-pair)
-;;  (format #f "~A~A" (lookup-namespace (car ns-pair)) (cadr ns-pair)))
-
-;; (define (namespace-pair? x)
-;;   (pair? x))
-
-;; or consider a general function (expand-namespace mu 'pred)
 (define-syntax define-namespace
   (syntax-rules ()
     ((define-namespace name namespace)
@@ -227,55 +162,144 @@
        (define (name elt)
          (read-uri (conc namespace elt)))))))
 
-(define (insert-triples triples  #!key (graph (*default-graph*)))
-  (format #f "WITH ~A~%INSERT {~%  ~A ~%}"
-	  graph
-	  triples))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; RDF
 
-(define (delete-triples triples  #!key (graph (*default-graph*)) (where #f))
-  (conc
-   (format #f "WITH ~A~%DELETE {~%  ~A ~%}" graph triples)
-   (if where (format #f "~%WHERE {~% ~A ~%}" where) "")))
+(define (range n)
+  (list-tabulate n values))
 
-(define (sparql-vars vars)
+(define (reify x)
+  (cond ((string? x) (conc "\"" x "\""))
+        ((keyword? x) (keyword->string x))
+        ((number? x) (number->string x))
+        ((symbol? x) (symbol->string x))
+        ((pair? x) (or (reify-special x) 
+                       (string-join (map reify x) " ")))))
+
+; (case (car x)
+ ;                    ((*COLLECTION*) (format #f "(~A)" (string-join (map reify (cdr x)) " ")))
+  ;                   ((*BLANK*) (format #f "[~A]" (string-join (map reify (cdr x)) " ")))
+   ;                  ((*QUADS*) (format #f "{~A}" (string-join (map reify (cdr x)) " ")))
+    ;                 ((*TRIPLES*) (string-join (map reify-triple (cdr x)) ". "))
+;                     (else (string-join (map reify x) " "))))))
+
+
+(define (reify-special x)
+  (case (car x)
+    ((*COLLECTION*) (format #f "(~A)" (string-join (map reify (cdr x)) " ")))
+    ((*BLANK*) (format #f "[~A]" (string-join (map reify (cdr x)) " ")))
+    ((*QUADS*) (format #f "{~A}" (string-join (map reify (cdr x)) " ")))
+    ((*TRIPLES*) (string-join (map reify-triple (cdr x)) ". "))
+    (else #f)))
+
+(define (reify-triple x)
+(print "statement " x)
+  (string-join (map (lambda (e p)
+                      (reify-triple-parts e p))
+                    x (range (length x)))
+               " "))
+
+(define (reify-triple-parts x pos)
+  (if (pair? x)
+      (case pos
+        ((0) (reify x))
+        ((1) (reify-properties x))
+        ((2) (reify-objects x)))
+      (reify x)))
+
+(define (reify-properties x)
+  (if (pair? x)
+      (string-join (map (lambda (e)
+                          (string-join
+                           (map (lambda (y) (reify-triple-parts y 2)) e)
+                           " "))
+                        x)
+                   ";  ")
+      (reify x)))
+
+(define (reify-objects x)
+  (or (reify-special x)
+      (string-join (map (lambda (y) (reify y)) x)
+                   ", ")))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; RDF convenience functions
+
+(define (s-triple triple)
+  (if (string? triple)
+      triple
+      (reify-triple triple)))
+
+(define (s-triples trips)
+  (string-join (map s-triple trips) ".\n"))
+
+(define (triple a b c)
+  (s-triple (list a b c)))
+
+(define (triples trips)
+  (string-join trips "\n"))
+
+(define (s-bracketed statement)
+  (format #f "{~A}" statement))         
+
+(define (s-graph graph statements)
+  (if graph
+      (format #f "GRAPH ~A { ~A } ."
+              (reify graph)
+              statements)
+      statements))
+
+(define (s-union statements)
+  (string-join (map s-bracketed statements) " UNION "))
+
+(define (s-optional statement)
+  (format #f "~%OPTIONAL { ~A }" statement))
+
+(define (s-filter statement filter)
+  (format #f "~A FILTER (~A)" statement filter))
+
+(define (s-bind as var)
+  (format #f "BIND ~A as ~A" as var))
+
+(define (s-insert triples #!key (with-graph (*default-graph*)))
+  (conc (if with-graph (format #f "WITH ~A " with-graph) "")
+        (format #f "~%INSERT {~%  ~A ~%}" triples)))
+
+(define (sparql-varlist vars)
   (if (pair? vars)
       (string-join (map ->string vars) ", ")
       (->string vars)))
 
-(define (select-triples vars statements #!key (graph (*default-graph*)) order-by)
+(define (s-select vars statements
+                  #!key with-graph (from-graph (*default-graph*)) 
+                  (from-named-graphs '()) order-by)
   (let ((query (if (pair? statements) (string-join statements "\n") statements))
         (order-statement (if order-by
 			     (format #f "~%ORDER BY ~A" order-by)
 			     "")))
-    (format #f "WITH ~A~%SELECT ~A~%WHERE {~% ~A ~%} ~A"
-	    graph (sparql-vars vars) query order-statement)))
+    (conc (if with-graph (format #f "WITH ~A " with-graph) "")
+          (format #f "SELECT ~A~%" (sparql-varlist vars))
+          (if from-graph (format #f "FROM ~A~%" from-graph) "")
+          (string-join
+           (map (lambda (graph)
+                  (format #f "FROM NAMED ~A~%" graph))
+                from-named-graphs))
+          (format #f "WHERE {~% ~A ~%} ~A"
+                  query order-statement))))
 
-(define (select-from vars statements
-		     #!key (graph (*default-graph*)) (named-graphs '()) order-by)
-  (let ((query (if (pair? statements) (string-join statements "\n") statements))
-        (order-statement (if order-by
-			     (format #f "~%ORDER BY ~A" order-by)
-			     "")))
-    (format #f (conc "SELECT ~A~%"
-		     "FROM ~A~%"
-		     (string-join
-		      (map (lambda (graph)
-			     (format #f "FROM NAMED ~A~%" graph))
-			   named-graphs))
-		     "WHERE {~% ~A ~%} ~A")
-	    (sparql-vars vars) graph query order-statement)))
-
-(define (delete-from statements
-		     #!key (graph (*default-graph*)) (named-graphs '()) where)
+(define (s-delete statements
+                  #!key insert with-graph (from-graph (*default-graph*)) 
+                  (from-named-graphs '()) where)
   (let ((statements (if (pair? statements) (string-join statements "\n") statements)))
-    (format #f (conc "DELETE { ~A }~%"
-                     "FROM ~A~%"
-                     (string-join
-                      (map (lambda (graph)
-                             (format #f "FROM NAMED ~A~%" graph))
-                           named-graphs))
-                     "WHERE {~% ~A ~%}~%")
-            statements graph where)))
+    (conc (if with-graph  (format #f "WITH ~A " with-graph) "")
+          (format #f "DELETE { ~A }~%" statements)
+          (if insert (format #f "INSERT { ~A }~%" insert) "")
+          (if from-graph (format #f "FROM ~A~%" from-graph) "")
+          (string-join
+           (map (lambda (graph)
+                  (format #f "FROM NAMED ~A~%" graph))
+                from-named-graphs))
+          (format #f "WHERE {~% ~A ~%}~%" where))))
 
 (define (expand-namespace-prefixes namespaces)
   (apply conc
@@ -341,8 +365,8 @@
   (map (lambda (binding)
 	 (map sparql-binding binding))
 	  (vector->list
-	   (assoc-get 'bindings
-		     (assoc-get 'results results)))))
+	   (alist-ref 'bindings
+                      (alist-ref 'results results)))))
 
 (define-syntax with-bindings
   (syntax-rules ()
@@ -371,7 +395,11 @@
          (register-namespace (string->symbol prefix)                                
                              uri)))
      (string-split *namespace-definitions* ","))
-       
-(define-namespace mu "http://mu.semte.ch/vocabularies/core/")
+
+(define-namespace foaf "http://xmlns.com/foaf/0.1/")
+(define-namespace dc "http://purl.org/dc/elements/1.1/")
+(define-namespace rdf "http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+(define-namespace owl "http://www.w3.org/2002/07/owl#")
+(define-namespace skos "http://www.w3.org/2004/02/skos/core#")
 
 )
