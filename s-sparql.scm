@@ -8,7 +8,9 @@
 
 (define (read-uri uri)
   (and (string? uri)
-       (string->symbol (conc "<" uri ">"))))
+       (if (string-contains uri "://") ;; a bit hacky
+           (string->symbol (conc "<" uri ">"))
+           (string->symbol uri))))
 
 (define *default-graph*
   (make-parameter
@@ -205,7 +207,7 @@
 
 (define (write-expand-namespace ns-pair)
   (if (s-iri? ns-pair)
-      ns-pair
+      (write-uri ns-pair)
       (let ((pair (string-split (->string ns-pair) ":")))
         (conc (lookup-namespace (string->symbol (car pair)))
               (cadr pair)))))
