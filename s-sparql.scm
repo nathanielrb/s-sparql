@@ -112,8 +112,8 @@
 	  ((keyword? x) (keyword->string x))
 	  ((number? x) x)
 	  ;;((list? x) (apply conc x))
-          ((symbol? x) (symbol->string x))
-	  ((namespace-pair? x) (expand-namespace x))))
+          ((symbol? x) (symbol->string x)) ))
+	  ;; ((namespace-pair? x) (expand-namespace x))))
 
 (define (new-sparql-variable)
   (string->symbol (conc "?" (->string (gensym)))))
@@ -187,19 +187,34 @@
 (define (lookup-namespace name)
   (car-when (alist-ref name (*namespaces*))))
 
-(define (expand-namespace ns-pair)
-  (read-uri (format #f "~A~A" (lookup-namespace (car ns-pair)) (cadr ns-pair))))
+;; (define (expand-namespace ns-pair)
+;;   (read-uri (format #f "~A~A" (lookup-namespace (car ns-pair)) (cadr ns-pair))))
+
+(define (s-iri? elt)
+  (let ((s (->string elt)))
+    (and (string-prefix? "<" s)
+         (string-suffix? ">" s))))
 
 (define (expand-namespace ns-pair)
-  (let ((pair (string-split (->string ns-pair) ":")))
-    (conc (lookup-namespace (string->symbol (car pair)))
-          (cadr pair))))
+  (if (s-iri? ns-pair)
+      ns-pair
+      (let ((pair (string-split (->string ns-pair) ":")))
+        (string->symbol
+         (conc (lookup-namespace (string->symbol (car pair)))
+               (cadr pair))))))
 
 (define (write-expand-namespace ns-pair)
-  (format #f "~A~A" (lookup-namespace (car ns-pair)) (cadr ns-pair)))
+  (if (s-iri? ns-pair)
+      ns-pair
+      (let ((pair (string-split (->string ns-pair) ":")))
+        (conc (lookup-namespace (string->symbol (car pair)))
+              (cadr pair)))))
 
-(define (namespace-pair? x)
-  (pair? x))
+;; (define (write-expand-namespace ns-pair)
+;;  (format #f "~A~A" (lookup-namespace (car ns-pair)) (cadr ns-pair)))
+
+;; (define (namespace-pair? x)
+;;   (pair? x))
 
 ;; or consider a general function (expand-namespace mu 'pred)
 (define-syntax define-namespace
