@@ -25,10 +25,6 @@
 
 (define *namespaces* (make-parameter '()))
 
-(define *namespace-definitions*
-  (or (get-environment-variable "MU_NAMESPACES")
-      "skos: http://www.w3.org/2004/02/skos/core#"))
-
 (define-syntax hit-property-cache
   (syntax-rules ()
     ((hit-property-cache sym prop body)
@@ -176,24 +172,17 @@
         ((pair? x) (or (reify-special x) 
                        (string-join (map reify x) " ")))))
 
-; (case (car x)
- ;                    ((*COLLECTION*) (format #f "(~A)" (string-join (map reify (cdr x)) " ")))
-  ;                   ((*BLANK*) (format #f "[~A]" (string-join (map reify (cdr x)) " ")))
-   ;                  ((*QUADS*) (format #f "{~A}" (string-join (map reify (cdr x)) " ")))
-    ;                 ((*TRIPLES*) (string-join (map reify-triple (cdr x)) ". "))
-;                     (else (string-join (map reify x) " "))))))
-
-
 (define (reify-special x)
   (case (car x)
-    ((*COLLECTION*) (format #f "(~A)" (string-join (map reify (cdr x)) " ")))
-    ((*BLANK*) (format #f "[~A]" (string-join (map reify (cdr x)) " ")))
-    ((*QUADS*) (format #f "{~A}" (string-join (map reify (cdr x)) " ")))
-    ((*TRIPLES*) (string-join (map reify-triple (cdr x)) ". "))
+    ((|@()|) (format #f "(~A)" (string-join (map reify (cdr x)) " ")))
+    ((|@[]|) (format #f "[~A]" (string-join (map reify (cdr x)) " ")))
+    ;; ((*QUADS*) (format #f "{~A}" (string-join (map reify (cdr x)) " ")))
+    ((|@{}|) (format #f "{~A}" (string-join (map reify-triple (cdr x)) ". ")))
+    ((@Prologue @SelectQuery @SelectClause @DatasetClause @WhereClause)
+     (string-join (map reify (cdr x)) "\n"))
     (else #f)))
 
 (define (reify-triple x)
-(print "statement " x)
   (string-join (map (lambda (e p)
                       (reify-triple-parts e p))
                     x (range (length x)))
@@ -388,13 +377,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Startup
-
-(map (lambda (ns) 
-       (match-let (((prefix uri)
-                    (irregex-split ": " ns)))
-         (register-namespace (string->symbol prefix)                                
-                             uri)))
-     (string-split *namespace-definitions* ","))
 
 (define-namespace foaf "http://xmlns.com/foaf/0.1/")
 (define-namespace dc "http://purl.org/dc/elements/1.1/")
