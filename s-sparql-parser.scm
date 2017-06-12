@@ -96,18 +96,6 @@
   (bind-consumed->symbol
    (between-fws (char-list/lit str))))
 
-(define (bracketed p)
-  (->alist
-   '|[]| p))
-
-(define (braced p)
-  (->alist
-   '|{}| p))
-
-(define (paren-ed p)
-  (->alist
-   '|()| p))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Production for terminals
 
@@ -224,21 +212,19 @@
    (concatenation PNAME_NS PN_LOCAL)) )
 
 (define PNAME_NS
-  (bind-consumed->symbol
-   (concatenation
-    (repetition1 char-list/alpha) (char-list/lit ":"))))
+  (concatenation
+   (repetition1 char-list/alpha) 
+   (char-list/lit ":")))
 
 (define IRIREF
-  (bind-consumed->symbol
-   (between-fws
-    (concatenation
-     (char-list/lit "<http://")
-     (repetition1 
-      (alternatives ;; should be list-from-string
-       char-list/alpha
-       (char-list/lit ".")
-       (char-list/lit "/")))
-     (char-list/lit ">")))))
+  (concatenation
+   (char-list/lit "<http://")
+   (repetition1 
+    (alternatives ;; should be list-from-string
+     char-list/alpha
+     (char-list/lit ".")
+     (char-list/lit "/")))
+   (char-list/lit ">")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Grammar
@@ -248,11 +234,13 @@
 
 (define PrefixedName
   (bind-consumed->symbol
-   (between-fws
-    (alternatives PNAME_LN PNAME_NS))))
+   (alternatives PNAME_LN PNAME_NS)))
 
 (define iri
-  (alternatives IRIREF PrefixedName))
+  (alternatives 
+   (bind-consumed->symbol
+    (between-fws IRIREF))
+   PrefixedName))
 
 (define String
   (alternatives
@@ -357,22 +345,22 @@
 
 (define BlankNodePropertyListPath
   (vac
-   (bind-consumed-values->alist
-    '*BLANK*
-   (:: (lit/sym "[")
+   (->alist
+    '|@[]|
+   (:: (drop-consumed (lit/sym "["))
        PropertyListPathNotEmpty
-       (lit/sym "]")))) )
+        (drop-consumed (lit/sym "]")))) ))
 
 (define TriplesNodePath
   (alternatives CollectionPath BlankNodePropertyListPath))
 
 (define BlankNodePropertyList
   (vac
-   (bind-consumed-values->alist
-    '*BLANK*
-   (:: (lit/sym "[")
+   (->alist
+    '|@[]|
+    (:: (drop-consumed (lit/sym "["))
        PropertyListNotEmpty
-       (lit/sym "]")))) )
+        (drop-consumed (lit/sym "]")))) ))
 
 (define TriplesNode
    (alternatives Collection BlankNodePropertyList)) ;; ** !!
@@ -487,14 +475,17 @@
 
 (define GroupOrUnionGraphPattern
   (vac
-   (::
-    GroupGraphPattern
-    (:* (::
-	 (lit/sp "UNION") GroupGraphPattern)))))
+   (->alist
+    'UNION
+    (::
+     GroupGraphPattern
+     (:* (::
+          (drop-consumed (lit/sp "UNION"))
+          GroupGraphPattern))))))
 
 (define MinusGraphPattern
   (vac
-   (:: (lit/sp "MINUS") GroupGraphPattern)))
+   (:: (lit/sym "MINUS") GroupGraphPattern)))
 
 ;; DataBlockValue
 
@@ -512,9 +503,10 @@
 
 (define GraphGraphPattern
   (vac
-   (:: (lit/sp "GRAPH")
-       VarOrIri
-       GroupGraphPattern)))
+   (->list
+    (:: (lit/sym "GRAPH")
+        VarOrIri
+        GroupGraphPattern))))
 
 (define OptionalGraphPattern
   (vac
@@ -523,8 +515,10 @@
        GroupGraphPattern)))
 
 (define GraphPatternNotTriples
-  (alternatives GroupOrUnionGraphPattern OptionalGraphPattern
-		MinusGraphPattern GraphGraphPattern))
+  (alternatives GroupOrUnionGraphPattern
+                OptionalGraphPattern
+		MinusGraphPattern
+                GraphGraphPattern))
 
 (define TriplesBlock
   (vac
@@ -535,20 +529,21 @@
 
 (define GroupGraphPatternSub
    (::
-    (:? TriplesBlock) ))
-    ;; (:*
-    ;; (:: GraphPatternNotTriples
-    ;; (:? (lit/sp "."))
-    ;; (:? TriplesBlock))))
+    (:? TriplesBlock)
+     (:*
+      (:: GraphPatternNotTriples
+          (:? (lit/sp "."))
+          (:? TriplesBlock)))))
 
 (define GroupGraphPattern 
   (vac
-   (->alist
-    '|@{}|
+   ;;(->list
+    ;;'|@{}|
     (:: (drop-consumed (lit/sp "{"))
-        GroupGraphPatternSub
-        ;;(alternatives SubSelect GroupGraphPatternSub)
-        (drop-consumed (lit/sp "}"))))))
+        (alternatives
+         ;; SubSelect
+         GroupGraphPatternSub)
+        (drop-consumed (lit/sp "}")))))
 
 ;; TriplesTemplate
 
@@ -619,10 +614,9 @@
 ;; SolutionModifier
 
 (define WhereClause
-  (bind-consumed-values->list
-   (::
-    (lit/sym "WHERE")
-    GroupGraphPattern)))
+  (::
+   (lit/sym "WHERE")
+   GroupGraphPattern))
 
 (define SourceSelector iri)
 
@@ -667,21 +661,20 @@
        ))
 
 (define SelectQuery
-  (:: (->alist 
-       '@SelectClause SelectClause)
-      (->alist
-       '@DatasetClause (:* DatasetClause))
-      (->alist
-       '@WhereClause WhereClause)
+  (:: (->list SelectClause) ;; '@SelectClause 
+      (->alist '@Dataset (:* DatasetClause)) ;;'@DatasetClause
+      (->list WhereClause) ;;'@WhereClause 
       ;; SolutionModifier
       ))
 
 (define PrefixDecl
-  (bind-consumed-values->list
+  (->list
    (concatenation
     (lit/sym "PREFIX")
-    PNAME_NS
-    IRIREF)))
+    (bind-consumed->symbol 
+     (between-fws PNAME_NS))
+    (bind-consumed->symbol
+     (between-fws IRIREF)))))
 
 ;; BaseDecl
 
@@ -694,13 +687,14 @@
 
 (define Query
   (concatenation
-   (->alist
-    '@Prologue Prologue)
-   (->alist
-    '@SelectQuery SelectQuery)))
-;; ConstructQuery DescribeQuery AskQuery )
-;;	       ValuesClause))
-
+   (->alist '@Prologue Prologue)
+   (->alist '@Query
+            (alternatives
+             SelectQuery
+             ;; ConstructQuery DescribeQuery AskQuery )
+             ))
+   ;; (->alist '@Values ValuesClause)
+   ))
 ;; QueryUnit
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -715,9 +709,31 @@ FROM <http://www.google.com/>
 FROM NAMED <http://www.google.com/>  
   WHERE {
     [] ?p ?o .
-    ?p ?o ?v .
+    [?b ?v] ?o ?v .
     ?p ?x ?x, ?zoop  .
      ?p ?z ?l, ?m, ?o; ?zan ?zim, ?zing, ?zot;
+  } 
+")))
+
+(define s (car (lex Query err "PREFIX pre: <http://www.home.com/> 
+                  PREFIX pre: <http://www.gooogle.com/> 
+SELECT ?a ?a
+FROM <http://www.google.com/>
+FROM NAMED <http://www.google.com/>  
+  WHERE {
+     GRAPH ?g { ?s ?p ?o }
+  } 
+")))
+
+(define t (car (lex Query err "PREFIX pre: <http://www.home.com/> 
+                  PREFIX pre: <http://www.gooogle.com/> 
+SELECT ?a ?a
+FROM <http://www.google.com/>
+FROM NAMED <http://www.google.com/>  
+  WHERE {
+     { ?s mu:uuid ?o }  
+    UNION { ?a ?b ?c }
+    UNION { GRAPH ?g { ?l ?t ?u } }
   } 
 ")))
 
@@ -732,5 +748,39 @@ FROM NAMED <http://www.google.com/>
        (cdr keys))))
 
 (print r)
+(newline)
+(print s)
 
-(print (lex GroupGraphPattern err " { ?p ?z ?l, ?m, ?o; ?zan ?zim, ?zing, ?zot; }"))
+(use s-sparql)
+
+;; also port ...
+(define (read-sparql str)
+  (lex Query err str))
+
+(define (sparql-prologue QueryUnit)
+  (alist-ref '@Prologue QueryUnit))
+
+(define (sparql-dataset QueryUnit)
+  (alist-ref '@Dataset QueryUnit))
+
+(define (sparql-query QueryUnit)
+  (alist-ref '@Query QueryUnit))
+
+(define (query-select Query)
+  (alist-ref 'SELECT Query))
+
+(define (sparql-select QueryUnit)
+  (query-select (sparql-query QueryUnit)))
+
+(define (query-dataset Query)
+  (alist-ref '@Dataset Query))
+
+(define (sparql-dataset QueryUnit)
+  (query-dataset (sparql-query QueryUnit)))
+
+(define (query-where Query)
+  (alist-ref 'WHERE Query))
+
+(define (sparql-where QueryUnit)
+  (query-where (sparql-query QueryUnit)))
+

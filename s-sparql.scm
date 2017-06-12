@@ -172,21 +172,29 @@
         ((pair? x) (or (reify-special x) 
                        (string-join (map reify x) " ")))))
 
+(define (bracketed x) (format #f "{ ~A }" x))
+
 (define (reify-special x)
   (case (car x)
-    ((|@()|) (format #f "(~A)" (string-join (map reify (cdr x)) " ")))
-    ((|@[]|) (format #f "[~A]" (string-join (map reify (cdr x)) " ")))
-    ;; ((*QUADS*) (format #f "{~A}" (string-join (map reify (cdr x)) " ")))
-    ((|@{}|) (format #f "{~A}" (string-join (map reify-triple (cdr x)) ". ")))
-    ((@Prologue @SelectQuery @SelectClause @DatasetClause @WhereClause)
-     (string-join (map reify (cdr x)) "\n"))
+    ((@Prologue @Query @Dataset) (string-join (map reify (cdr x)) "\n"))
+    ((|@()|) (format #f "( ~A )" (string-join (map reify (cdr x)) " ")))
+    ((|@[]|) (format #f "[ ~A ]" (string-join (map reify (cdr x)) " ")))
+    ;; ((|@{}|) (format #f "{ ~A }" (string-join (map reify-triple (cdr x)) ". ")))
+    ((UNION) (string-join (map bracketed (map reify-triple (cdr x))) " UNION "))
+    ((GRAPH) (format #f "GRAPH ~A { ~A } "
+                     (reify (cadr x))
+                     (string-join (map reify-triple (cddr x)) ". ")))
+    ((MINUS OPTIONAL) (bracketed (string-join (map reify-triple x) " ")))
     (else #f)))
 
+;; Special rules for GroupGraphPatternSub: 
+;; TriplesBlock, GRAPH, UNION, OPTIONAL, and MINUS
 (define (reify-triple x)
-  (string-join (map (lambda (e p)
-                      (reify-triple-parts e p))
-                    x (range (length x)))
-               " "))
+  (or (reify-special x) 
+      (string-join (map (lambda (e p)
+                          (reify-triple-parts e p))
+                        x (range (length x)))
+                   " ")))
 
 (define (reify-triple-parts x pos)
   (if (pair? x)
