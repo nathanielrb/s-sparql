@@ -1,5 +1,7 @@
 (require-extension typeclass input-classes abnf abnf-charlist  abnf-consumers)
 
+(use matchable)
+
 (define *alist?* (make-parameter #f))
 
 ;; Docs:
@@ -216,7 +218,7 @@
    (repetition1 char-list/alpha) 
    (char-list/lit ":")))
 
-(define IRIREF
+(define IRIREF ;; **
   (concatenation
    (char-list/lit "<http://")
    (repetition1 
@@ -403,11 +405,11 @@
 (define ObjectPath GraphNodePath)
 
 (define	ObjectListPath
-  (->list
+;;  (->list
    (:: ObjectPath
        (:*
         (:: (drop-consumed (lit/sp ","))
-            ObjectPath)))))
+            ObjectPath))))
 
 (define VerbSimple Var)
 
@@ -442,11 +444,11 @@
 (define Object GraphNode)
 
 (define ObjectList
-  (->list
+  ;(->list
    (:: Object
        (:*
 	(:: (drop-consumed (lit/sp ","))
-	    Object)))))
+	    Object))))
 
 (define Verb (alternatives VarOrIri (lit/sym "a")))
 
@@ -697,6 +699,158 @@
    ))
 ;; QueryUnit
 
+
+(define (nested-alist-ref alist #!rest keys)
+  (nested-alist-ref* alist keys))
+
+(define (nested-alist-ref* alist keys)
+  (if (null? keys)
+      alist
+      (nested-alist-ref
+       (alist-ref (car keys) alist)
+       (cdr keys))))
+
+
+
+
+
+(use s-sparql)
+
+;; should also read from ports
+(define (read-sparql str)
+  (lex Query err str))
+
+(define (query-prologue QueryUnit)
+  (alist-ref '@Prologue QueryUnit))
+
+(define (PrefixDecl? decl) (equal? (car decl) 'PREFIX))
+
+(define (BaseDecl? decl) (equal? (car decl) 'BASE))
+
+(define (remove-trailing-char sym #!optional (len 1))
+  (let ((s (symbol->string sym)))
+    (string->symbol
+     (substring s 0 (- (string-length s) len)))))
+
+(define (query-prefixes QueryUnit)
+  (map (lambda (decl)
+         (list (remove-trailing-char (cadr decl))
+               (write-uri (caddr decl))))
+       (filter PrefixDecl? (query-prologue QueryUnit))))
+
+(define (query-bases QueryUnit)
+  (map (lambda (decl)
+         (list (cadr decl)
+               (write-uri (caddr decl))))
+       (map cdr (filter BaseDecl? (query-prologue QueryUnit)))))
+
+(define (query-dataset QueryUnit)
+  (alist-ref '@Dataset QueryUnit))
+
+(define (query-query QueryUnit)
+  (alist-ref '@Query QueryUnit))
+
+(define (query-select QueryUnit)
+  (assoc 'SELECT (query-query QueryUnit)))
+
+(define (query-dataset QueryUnit)
+  (alist-ref '@Dataset (query-query QueryUnit)))
+
+(define (query-where QueryUnit)
+  (assoc 'WHERE (query-query QueryUnit)))
+
+
+
+
+
+(define (expand-special triple)
+  (case (car triple)
+    ((WHERE) 
+     (cons (car triple) (join (map expand-triple (cdr triple)))))
+    ((|@()| |@[]| MINUS OPTIONAL UNION)
+     (list (cons (car triple) (join (map expand-triple (cdr triple))))))
+    ((GRAPH) (list (append (take triple 2)
+                           (join (map expand-triple (cddr triple))))))
+    (else #f)))
+
+(define (expand-triple triple)
+   (or (expand-special triple)
+       (match triple
+         ((subject predicates)
+          (let ((subject (car triple)))
+            (join
+             (map (lambda (po-list)
+                    (let ((predicate (car po-list)))
+                      (map (lambda (object)
+                             (list subject predicate object))
+                           (cdr po-list))))
+                  predicates))))
+         ((subject predicate . objects)
+          (map (lambda (object)
+                 (list subject predicate object))
+               objects)))))
+
+(define *rules* '(((_ mu:uuid) GRAPH:ONE)))
+
+(define (rule-equal? subject predicate rule)
+  (match-let
+      ((((rule-subject rule-predicate) graph) rule))
+    (and
+     (or (equal? rule-subject '_) 
+         (equal? rule-subject subject))
+     (or (equal? rule-predicate '_) 
+         (equal? rule-predicate predicate))
+     graph)))
+
+(define (lookup-rule subject predicate rules)
+  (and (not (null? rules))
+       (or (rule-equal? subject predicate (car rules))
+           (lookup-rule subject predicate (cdr rules)))))
+
+;; rewrite could do its own expanding, if objects are not matched against
+;; to avoid over-graphing.
+;; also, it should  group expanded triples by same graph...
+(define (rewrite group)
+  (case (car group)
+    ((WHERE)
+     (cons (car group) (join (map rewrite (cdr group)))))
+    ((|@()| |@[]| MINUS OPTIONAL UNION)
+     (list (cons (car group) (join (map rewrite (cdr group))))))
+    ((GRAPH) (list (append (take group 2)
+                           (join (map rewrite (cddr group))))))
+    (else (let ((triples (expand-triple group)))
+            (map (lambda (triple)
+                   (let ((graph (lookup-rule (car triple) (cadr triple) *rules*)))
+                     (if graph
+                         `(GRAPH ,graph ,triple)
+                         triple)))
+                 triples)))))
+
+
+(require-extension sort-combinators)
+
+;; already mapping rewrite so can't group!
+(define (rewrite-faulty group)
+  (case (car group)
+    ((WHERE)
+     (cons (car group) (join (map rewrite (cdr group)))
+    ((|@()| |@[]| MINUS OPTIONAL UNION)
+     (list (cons (car group) (join (map rewrite (cdr group))))))
+    ((GRAPH) (list (append (take group 2)
+                           (join (map rewrite (cddr group))))))
+    (else (let ((triples (expand-triple group)))
+            (let ((graph (lambda (triple)
+                           (cons (lookup-rule (car triple) (cadr triple) *rules*)
+                                 triple))))
+;;              (map (lambda (group)
+              (print (map graph triples))
+              ((group-by car) (map graph triples)))))))
+
+;                     (if graph
+ ;                        `(GRAPH ,graph ,triple)
+  ;                       triple)))
+   ;              triples)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Tests
 
@@ -716,7 +870,7 @@ FROM NAMED <http://www.google.com/>
 ")))
 
 (define s (car (lex Query err "PREFIX pre: <http://www.home.com/> 
-                  PREFIX pre: <http://www.gooogle.com/> 
+                  PREFIX rdf: <http://www.gooogle.com/> 
 SELECT ?a ?a
 FROM <http://www.google.com/>
 FROM NAMED <http://www.google.com/>  
@@ -725,62 +879,20 @@ FROM NAMED <http://www.google.com/>
   } 
 ")))
 
-(define t (car (lex Query err "PREFIX pre: <http://www.home.com/> 
-                  PREFIX pre: <http://www.gooogle.com/> 
-SELECT ?a ?a
+(define t (car (lex Query err "PREFIX mu: <http://mu.semte.ch/application/> 
+PREFIX dc: <http://schema.org/dc/> 
+SELECT ?a ?b
 FROM <http://www.google.com/>
-FROM NAMED <http://www.google.com/>  
+FROM NAMED <http://www.google.com/app>  
   WHERE {
-     { ?s mu:uuid ?o }  
-    UNION { ?a ?b ?c }
-    UNION { GRAPH ?g { ?l ?t ?u } }
+   { ?a mu:uuid ?b . ?c mu:uuid ?e . ?f ?g ?h }
+   UNION   { ?s mu:uuid ?o, ?p, ?q }  
+    UNION { ?a dc:title ?title }
+    UNION { GRAPH ?g { ?l mu:function ?u } }
   } 
+
 ")))
-
-(define (nested-alist-ref alist #!rest keys)
-  (nested-alist-ref* alist keys))
-
-(define (nested-alist-ref* alist keys)
-  (if (null? keys)
-      alist
-      (nested-alist-ref
-       (alist-ref (car keys) alist)
-       (cdr keys))))
 
 (print r)
 (newline)
 (print s)
-
-(use s-sparql)
-
-;; also port ...
-(define (read-sparql str)
-  (lex Query err str))
-
-(define (sparql-prologue QueryUnit)
-  (alist-ref '@Prologue QueryUnit))
-
-(define (sparql-dataset QueryUnit)
-  (alist-ref '@Dataset QueryUnit))
-
-(define (sparql-query QueryUnit)
-  (alist-ref '@Query QueryUnit))
-
-(define (query-select Query)
-  (alist-ref 'SELECT Query))
-
-(define (sparql-select QueryUnit)
-  (query-select (sparql-query QueryUnit)))
-
-(define (query-dataset Query)
-  (alist-ref '@Dataset Query))
-
-(define (sparql-dataset QueryUnit)
-  (query-dataset (sparql-query QueryUnit)))
-
-(define (query-where Query)
-  (alist-ref 'WHERE Query))
-
-(define (sparql-where QueryUnit)
-  (query-where (sparql-query QueryUnit)))
-

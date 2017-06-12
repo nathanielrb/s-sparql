@@ -127,28 +127,30 @@
 (define (register-namespace name namespace)
   (*namespaces* (cons (list name namespace) (*namespaces*))))
 
-(define (lookup-namespace name)
-  (car-when (alist-ref name (*namespaces*))))
+(define (lookup-namespace name #!optional (namespaces (*namespaces*)))
+  (car-when (alist-ref name namespaces)))
 
 (define (s-iri? elt)
   (let ((s (->string elt)))
     (and (string-prefix? "<" s)
          (string-suffix? ">" s))))
 
-(define (expand-namespace ns-pair)
+(define (expand-namespace* ns-pair namespaces)
+  (let ((pair (string-split (->string ns-pair) ":")))
+    (format #f "~A~A"
+            (lookup-namespace (string->symbol (car pair)) namespaces)
+            (cadr pair))))
+
+(define (expand-namespace ns-pair #!optional (namespaces (*namespaces*)))
   (if (s-iri? ns-pair)
       ns-pair
-      (let ((pair (string-split (->string ns-pair) ":")))
-        (string->symbol
-         (conc (lookup-namespace (string->symbol (car pair)))
-               (cadr pair))))))
+      (string->symbol
+       (format #f "<~A>" (expand-namespace* ns-pair namespaces)))))               
 
-(define (write-expand-namespace ns-pair)
+(define (write-expand-namespace ns-pair #!optional (namespaces (*namespaces*)))
   (if (s-iri? ns-pair)
       (write-uri ns-pair)
-      (let ((pair (string-split (->string ns-pair) ":")))
-        (conc (lookup-namespace (string->symbol (car pair)))
-              (cadr pair)))))
+      (expand-namespace* ns-pair namespaces)))
 
 (define-syntax define-namespace
   (syntax-rules ()
@@ -172,44 +174,37 @@
         ((pair? x) (or (reify-special x) 
                        (string-join (map reify x) " ")))))
 
-(define (bracketed x) (format #f "{ ~A }" x))
-
 (define (reify-special x)
   (case (car x)
     ((@Prologue @Query @Dataset) (string-join (map reify (cdr x)) "\n"))
     ((|@()|) (format #f "( ~A )" (string-join (map reify (cdr x)) " ")))
     ((|@[]|) (format #f "[ ~A ]" (string-join (map reify (cdr x)) " ")))
-    ;; ((|@{}|) (format #f "{ ~A }" (string-join (map reify-triple (cdr x)) ". ")))
-    ((UNION) (string-join (map bracketed (map reify-triple (cdr x))) " UNION "))
+    ((WHERE) (format #f "WHERE { ~A }" (string-join (map reify-triple (cdr x)) ". ")))
+    ((UNION) (string-join (map s-bracketed (map reify-triple (cdr x))) " UNION "))
     ((GRAPH) (format #f "GRAPH ~A { ~A } "
                      (reify (cadr x))
                      (string-join (map reify-triple (cddr x)) ". ")))
-    ((MINUS OPTIONAL) (bracketed (string-join (map reify-triple x) " ")))
+    ((MINUS OPTIONAL) (s-bracketed (string-join (map reify-triple x) " ")))
     (else #f)))
 
-;; Special rules for GroupGraphPatternSub: 
-;; TriplesBlock, GRAPH, UNION, OPTIONAL, and MINUS
-(define (reify-triple x)
-  (or (reify-special x) 
-      (string-join (map (lambda (e p)
-                          (reify-triple-parts e p))
-                        x (range (length x)))
-                   " ")))
-
-(define (reify-triple-parts x pos)
-  (if (pair? x)
-      (case pos
-        ((0) (reify x))
-        ((1) (reify-properties x))
-        ((2) (reify-objects x)))
-      (reify x)))
+(define (reify-triple triple)
+  (or (reify-special triple) 
+      (string-join
+       (match triple
+         ((subject properties) 
+          (list (reify subject)
+                (reify-properties properties)))
+         ((subject predicate . objects)
+          (list (reify subject)
+                (reify-properties predicate)
+                (reify-objects objects)))))))
 
 (define (reify-properties x)
   (if (pair? x)
-      (string-join (map (lambda (e)
-                          (string-join
-                           (map (lambda (y) (reify-triple-parts y 2)) e)
-                           " "))
+      (string-join (map (lambda (property)
+                          (format #f "~A ~A"
+                                  (reify (car property))
+                                  (reify-objects (cdr property))))
                         x)
                    ";  ")
       (reify x)))
@@ -218,7 +213,7 @@
   (or (reify-special x)
       (string-join (map (lambda (y) (reify y)) x)
                    ", ")))
-
+         
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RDF convenience functions
 
@@ -237,7 +232,7 @@
   (string-join trips "\n"))
 
 (define (s-bracketed statement)
-  (format #f "{~A}" statement))         
+  (format #f "{ ~A }" statement))         
 
 (define (s-graph graph statements)
   (if graph
