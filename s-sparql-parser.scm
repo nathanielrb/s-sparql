@@ -2,7 +2,7 @@
 
 (use matchable)
 
-(define *alist?* (make-parameter #f))
+(require-extension sort-combinators)
 
 ;; Docs:
 ;; http://wiki.call-cc.org/eggref/4/abnf
@@ -63,13 +63,11 @@
     ((_ label p)      (bind (consumed-values->list label)  p))
     ))
 
-;; connect to *alist?*
 (define-syntax ->alist
   (syntax-rules () 
     ((_ label l p)    (bind (consumed-values->list label l)  p))
     ((_ label p)      (bind (consumed-values->list label)  p))
     ))
-
 
 (define fws
   (concatenation
@@ -80,7 +78,6 @@
       (alternatives char-list/crlf char-list/lf char-list/cr))))
    (repetition char-list/wsp)))
 ;;   (repetition char-list/wsp)))
-
 
 (define (between-fws p)
   (concatenation
@@ -480,10 +477,10 @@
    (->alist
     'UNION
     (::
-     GroupGraphPattern
+     (->list GroupGraphPattern)
      (:* (::
           (drop-consumed (lit/sp "UNION"))
-          GroupGraphPattern))))))
+          (->list GroupGraphPattern)))))))
 
 (define MinusGraphPattern
   (vac
@@ -539,8 +536,8 @@
 
 (define GroupGraphPattern 
   (vac
-   ;;(->list
-    ;;'|@{}|
+   ;; (->list
+   ;; '|@{}|
     (:: (drop-consumed (lit/sp "{"))
         (alternatives
          ;; SubSelect
@@ -775,9 +772,10 @@
 
 (define (expand-triples triples)
   (or (expand-special triples)
-      (expand-triple triple)))
+      (expand-triple triples)))
 
 (define (expand-triple triple)
+  (print "triple : " triple)
   (match triple
     ((subject predicates)
      (let ((subject (car triple)))
@@ -793,16 +791,22 @@
             (list subject predicate object))
           objects))))
 
-(define *rules* '(((_ mu:uuid) GRAPH:ONE)))
+(define-namespace mu "http://mu.semte.ch/vocabularies/core/")
+
+(define *rules* '(((_ mu:uuid) ?graph1)))
+
+(define query-namespaces (make-parameter (*namespaces*)))
 
 (define (rule-equal? subject predicate rule)
   (match-let
       ((((rule-subject rule-predicate) graph) rule))
     (and
      (or (equal? rule-subject '_) 
-         (equal? rule-subject subject))
+         (equal? (expand-namespace rule-subject)
+                 (expand-namespace subject (query-namespaces))))
      (or (equal? rule-predicate '_) 
-         (equal? rule-predicate predicate))
+         (equal? (expand-namespace rule-predicate)
+                 (expand-namespace predicate (query-namespaces))))
      graph)))
 
 (define (lookup-rule subject predicate rules)
@@ -810,34 +814,9 @@
        (or (rule-equal? subject predicate (car rules))
            (lookup-rule subject predicate (cdr rules)))))
 
-;; rewrite could do its own expanding, if objects are not matched against
-;; to avoid over-graphing.
-;; also, it should  group expanded triples by same graph...
-(define (rewrite group)
-  (case (car group)
-    ((WHERE)
-     (cons (car group) (join (map rewrite (cdr group)))))
-    ((|@()| |@[]| MINUS OPTIONAL UNION)
-     (list (cons (car group) (join (map rewrite (cdr group))))))
-    ((GRAPH) (list (append (take group 2)
-                           (join (map rewrite (cddr group))))))
-    (else (let ((triples (expand-triple group)))
-            (map (lambda (triple)
-                   (let ((graph (lookup-rule (car triple) (cadr triple) *rules*)))
-                     (if graph
-                         `(GRAPH ,graph ,triple)
-                         triple)))
-                 triples)))))
-
-
-(require-extension sort-combinators)
-
 (define (graph-of group)
   (and (equal? (car group) 'GRAPH)
        (cadr group)))
-
-;; (define (group-graphs groups)
-;;   (if
 
 (define (add-graph triple)
   (let ((graph (lookup-rule (car triple) (cadr triple) *rules*)))
@@ -846,22 +825,34 @@
         triple)))
 
 (define (join-graphs groups)
-  (map (lambda (group)
-         (if (graph-of (car group))
-             `(GRAPH ,(graph-of (car group))
-                     ,@(join (map cddr group)))
-             group))
-       ((group-by graph-of) groups)))
+  (join
+   (map (lambda (sorted-group)
+          (if (graph-of (car sorted-group))
+              `((GRAPH ,(graph-of (car sorted-group))
+                       ,@(join (map cddr sorted-group))))
+              sorted-group))
+        ((group-by graph-of) 
+         (sort groups
+               (lambda (a b)
+                 (string<= (->string (or (graph-of a) ""))
+                           (->string (or (graph-of b) "")))))))))
 
 (define (rewrite group)
   (case (car group)
     ((WHERE) 
      (cons (car group) (join-graphs (map rewrite (cdr group)))))
     ((|@()| |@[]| MINUS OPTIONAL UNION)
-     (list (cons (car group) (join-graphs (map rewrite (cdr group))))))
+     (cons (car group) (join-graphs (map rewrite (cdr group)))))
     ((GRAPH) (list (append (take group 2)
                            (join (map rewrite (cddr group))))))
-    (else (join (map add-graph (expand-triple group))))))
+    (else (if (pair? (car group)) ;; list of triples
+              (join-graphs (join (map rewrite group)))
+              (map add-graph (expand-triple group)))))) ;; triplesamesubject
+
+(define (rewrite-query query)
+  (parameterize ((query-namespaces (query-prefixes t)))
+    (rewrite (query-where query))))
+           
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Tests
@@ -891,8 +882,9 @@ FROM NAMED <http://www.google.com/>
   } 
 ")))
 
-(define t (car (lex Query err "PREFIX mu: <http://mu.semte.ch/application/> 
+(define t (car (lex Query err "
 PREFIX dc: <http://schema.org/dc/> 
+PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
 SELECT ?a ?b
 FROM <http://www.google.com/>
 FROM NAMED <http://www.google.com/app>  

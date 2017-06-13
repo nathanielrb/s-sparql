@@ -105,6 +105,11 @@
 (define (sparql-variable str)
   (string->symbol (conc "?" (->string str))))
 
+(define (sparql-variable? obj)
+  (and (symbol? obj)
+       (or (equal? "?" (substring (->string obj) 0 1))
+           (equal? "$" (substring (->string obj) 0 1)))))
+
 (define (un-sparql-variable var)
   (string->symbol (substring (symbol->string var) 1)))
 
@@ -128,7 +133,7 @@
   (*namespaces* (cons (list name namespace) (*namespaces*))))
 
 (define (lookup-namespace name #!optional (namespaces (*namespaces*)))
-  (car-when (alist-ref name namespaces)))
+  (car (alist-ref name namespaces)))
 
 (define (s-iri? elt)
   (let ((s (->string elt)))
@@ -142,7 +147,7 @@
             (cadr pair))))
 
 (define (expand-namespace ns-pair #!optional (namespaces (*namespaces*)))
-  (if (s-iri? ns-pair)
+  (if (or (sparql-variable? ns-pair)  (s-iri? ns-pair))
       ns-pair
       (string->symbol
        (format #f "<~A>" (expand-namespace* ns-pair namespaces)))))               
@@ -172,32 +177,35 @@
         ((number? x) (number->string x))
         ((symbol? x) (symbol->string x))
         ((pair? x) (or (reify-special x) 
-                       (string-join (map reify x) " ")))))
+                       (if (pair? (car x))
+                           (format #f "{ ~A }" (string-join (map reify x) " "))
+                           (reify-triple x))))))
 
 (define (reify-special x)
   (case (car x)
     ((@Prologue @Query @Dataset) (string-join (map reify (cdr x)) "\n"))
     ((|@()|) (format #f "( ~A )" (string-join (map reify (cdr x)) " ")))
     ((|@[]|) (format #f "[ ~A ]" (string-join (map reify (cdr x)) " ")))
-    ((WHERE) (format #f "WHERE { ~A }" (string-join (map reify-triple (cdr x)) ". ")))
-    ((UNION) (string-join (map s-bracketed (map reify-triple (cdr x))) " UNION "))
-    ((GRAPH) (format #f "GRAPH ~A { ~A } "
-                     (reify (cadr x))
-                     (string-join (map reify-triple (cddr x)) ". ")))
-    ((MINUS OPTIONAL) (s-bracketed (string-join (map reify-triple x) " ")))
+    ((UNION) (string-join (map reify (cdr x)) " UNION "))
+    ((GRAPH) (format #f "GRAPH ~A ~A  "
+                     (reify (cadr x)) (reify (cddr x))))
+    ((WHERE MINUS OPTIONAL) (format #f "~A ~A " (car x) (reify (cdr x))))
     (else #f)))
 
 (define (reify-triple triple)
+  (print "triple " triple)
   (or (reify-special triple) 
-      (string-join
-       (match triple
-         ((subject properties) 
-          (list (reify subject)
-                (reify-properties properties)))
-         ((subject predicate . objects)
-          (list (reify subject)
-                (reify-properties predicate)
-                (reify-objects objects)))))))
+      (conc
+       (string-join
+        (match triple
+          ((subject properties) 
+           (list (reify subject)
+                 (reify-properties properties)))
+          ((subject predicate . objects)
+           (list (reify subject)
+                 (reify-properties predicate)
+                 (reify-objects objects)))))
+       ". ")))
 
 (define (reify-properties x)
   (if (pair? x)
