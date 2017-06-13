@@ -1,14 +1,17 @@
-(require-extension typeclass input-classes abnf abnf-charlist  abnf-consumers)
-
-(use matchable)
-
-(require-extension sort-combinators)
-
 ;; Docs:
 ;; http://wiki.call-cc.org/eggref/4/abnf
 
 ;; Example:
 ;; https://code.call-cc.org/svn/chicken-eggs/release/4/json-abnf/trunk/json-abnf.scm
+
+(module s-sparql-parser *
+
+(import chicken scheme extras data-structures srfi-1) 
+
+(use srfi-1 srfi-13 matchable irregex)
+
+(require-extension typeclass input-classes abnf abnf-charlist abnf-consumers
+                   sort-combinators lexgen)
 
 (define char-list-<Input>
   (make-<Input> null? car cdr))
@@ -402,11 +405,11 @@
 (define ObjectPath GraphNodePath)
 
 (define	ObjectListPath
-;;  (->list
+  (->list
    (:: ObjectPath
        (:*
         (:: (drop-consumed (lit/sp ","))
-            ObjectPath))))
+            ObjectPath)))))
 
 (define VerbSimple Var)
 
@@ -441,11 +444,11 @@
 (define Object GraphNode)
 
 (define ObjectList
-  ;(->list
+  (->list
    (:: Object
        (:*
 	(:: (drop-consumed (lit/sp ","))
-	    Object))))
+	    Object)))))
 
 (define Verb (alternatives VarOrIri (lit/sym "a")))
 
@@ -694,31 +697,32 @@
               ))
     ;; (->alist '@Values ValuesClause)
     ))
+
 (define QueryUnit
- (->alist '@TOP Query))
- 
+  (->alist '@QueryUnit Query))
+
+;; should also read from ports
+(define (parse-query query)
+  ;;(cons '@TOP
+  (car (lex QueryUnit err query)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Accessors
+
 (define (nested-alist-ref alist #!rest keys)
   (nested-alist-ref* alist keys))
 
 (define (nested-alist-ref* alist keys)
-  (if (null? keys)
-      alist
-      (nested-alist-ref
-       (alist-ref (car keys) alist)
-       (cdr keys))))
+  (and keys
+       (if (null? keys)
+           alist
+           (nested-alist-ref*
+            (alist-ref (car keys) alist)
+            (cdr keys)))))
 
-
-
-
-
-(use s-sparql)
-
-;; should also read from ports
-(define (read-sparql str)
-  (lex Query err str))
 
 (define (query-prologue QueryUnit)
-  (alist-ref '@Prologue QueryUnit))
+  (nested-alist-ref QueryUnit '@QueryUnit '@Prologue))
 
 (define (PrefixDecl? decl) (equal? (car decl) 'PREFIX))
 
@@ -729,23 +733,11 @@
     (string->symbol
      (substring s 0 (- (string-length s) len)))))
 
-(define (query-prefixes QueryUnit)
-  (map (lambda (decl)
-         (list (remove-trailing-char (cadr decl))
-               (write-uri (caddr decl))))
-       (filter PrefixDecl? (query-prologue QueryUnit))))
-
-(define (query-bases QueryUnit)
-  (map (lambda (decl)
-         (list (cadr decl)
-               (write-uri (caddr decl))))
-       (map cdr (filter BaseDecl? (query-prologue QueryUnit)))))
-
 (define (query-dataset QueryUnit)
-  (alist-ref '@Dataset QueryUnit))
+  (nested-alist-ref QueryUnit '@QueryUnit '@Query '@Dataset))
 
 (define (query-query QueryUnit)
-  (alist-ref '@Query QueryUnit))
+  (nested-alist-ref QueryUnit '@QueryUnit '@Query))
 
 (define (query-select QueryUnit)
   (assoc 'SELECT (query-query QueryUnit)))
@@ -756,111 +748,12 @@
 (define (query-where QueryUnit)
   (assoc 'WHERE (query-query QueryUnit)))
 
-
-
-
-
-(define (expand-special triple)
-  (case (car triple)
-    ((WHERE) 
-     (cons (car triple) (join (map expand-triples (cdr triple)))))
-    ((|@()| |@[]| MINUS OPTIONAL UNION)
-     (list (cons (car triple) (join (map expand-triples (cdr triple))))))
-    ((GRAPH) (list (append (take triple 2)
-                           (join (map expand-triples (cddr triple))))))
-    (else #f)))
-
-(define (expand-triples triples)
-  (or (expand-special triples)
-      (expand-triple triples)))
-
-(define (expand-triple triple)
-  (print "triple : " triple)
-  (match triple
-    ((subject predicates)
-     (let ((subject (car triple)))
-       (join
-        (map (lambda (po-list)
-               (let ((predicate (car po-list)))
-                 (map (lambda (object)
-                        (list subject predicate object))
-                      (cdr po-list))))
-             predicates))))
-    ((subject predicate . objects)
-     (map (lambda (object)
-            (list subject predicate object))
-          objects))))
-
-(define-namespace mu "http://mu.semte.ch/vocabularies/core/")
-
-(define *rules* '(((_ mu:uuid) ?graph1)))
-
-(define query-namespaces (make-parameter (*namespaces*)))
-
-(define (rule-equal? subject predicate rule)
-  (match-let
-      ((((rule-subject rule-predicate) graph) rule))
-    (and
-     (or (equal? rule-subject '_) 
-         (equal? (expand-namespace rule-subject)
-                 (expand-namespace subject (query-namespaces))))
-     (or (equal? rule-predicate '_) 
-         (equal? (expand-namespace rule-predicate)
-                 (expand-namespace predicate (query-namespaces))))
-     graph)))
-
-(define (lookup-rule subject predicate rules)
-  (and (not (null? rules))
-       (or (rule-equal? subject predicate (car rules))
-           (lookup-rule subject predicate (cdr rules)))))
-
 (define (graph-of group)
   (and (equal? (car group) 'GRAPH)
        (cadr group)))
 
-(define (add-graph triple)
-  (let ((graph (lookup-rule (car triple) (cadr triple) *rules*)))
-    (if graph
-        `(GRAPH ,graph ,triple)
-        triple)))
-
-(define (join-graphs groups)
-  (join
-   (map (lambda (sorted-group)
-          (if (graph-of (car sorted-group))
-              `((GRAPH ,(graph-of (car sorted-group))
-                       ,@(join (map cddr sorted-group))))
-              sorted-group))
-        ((group-by graph-of) 
-         (sort groups
-               (lambda (a b)
-                 (string<= (->string (or (graph-of a) ""))
-                           (->string (or (graph-of b) "")))))))))
-
-(define (rewrite group)
-  (case (car group)
-    ((WHERE) 
-     (cons (car group) (join-graphs (map rewrite (cdr group)))))
-    ((|@()| |@[]| MINUS OPTIONAL UNION)
-     (cons (car group) (join-graphs (map rewrite (cdr group)))))
-    ((GRAPH) (list (append (take group 2)
-                           (join (map rewrite (cddr group))))))
-    (else (if (pair? (car group)) ;; list of triples
-              (join-graphs (join (map rewrite group)))
-              (map add-graph (expand-triple group)))))) ;; triplesamesubject
-
-(define (rewrite-query query)
-  (parameterize ((query-namespaces (query-prefixes t)))
-    (map (lambda (unit)
-           (case (car unit)
-             ((@Query) (rewrite (query-where query)))
-             (else unit)))
-         query)))           
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Tests
-
-(require-extension lexgen)
 
 (define r (car (lex Query err "PREFIX pre: <http://www.home.com/> 
                   PREFIX pre: <http://www.gooogle.com/> 
@@ -885,8 +778,8 @@ FROM NAMED <http://www.google.com/>
   } 
 ")))
 
-(define t (car (lex QueryUnit err "
-PREFIX dc: <http://schema.org/dc/> 
+(define t (parse-query ;; (car (lex QueryUnit err "
+"PREFIX dc: <http://schema.org/dc/> 
 PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
 SELECT ?a ?b
 FROM <http://www.google.com/>
@@ -898,8 +791,6 @@ FROM NAMED <http://www.google.com/app>
     UNION { GRAPH ?g { ?l mu:function ?u } }
   } 
 
-")))
+"))
 
-(print r)
-(newline)
-(print s)
+)

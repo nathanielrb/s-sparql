@@ -185,7 +185,7 @@
 ;; what about SELECT ?a ?b => commas or spaces?
 (define (reify-special x)
   (case (car x)
-    ((@TOP) (string-join (map reify (cdr x)) "\n"))
+    ((@QueryUnit) (string-join (map reify (cdr x)) "\n"))
     ((@Prologue @Query) (conc (string-join (map reify (cdr x)) "\n") "\n"))
     ((@Dataset) (string-join (map reify (cdr x)) "\n"))
     ((|@()|) (format #f "( ~A )" (string-join (map reify-triple (cdr x)) " ")))
@@ -207,7 +207,7 @@
               ((subject properties) 
                (list (reify subject)
                      (reify-properties properties)))
-              ((subject predicate . objects)
+              ((subject predicate objects)
                (list (reify subject)
                      (reify-properties predicate)
                      (reify-objects objects)))))
@@ -218,16 +218,49 @@
       (string-join (map (lambda (property)
                           (format #f "~A ~A"
                                   (reify (car property))
-                                  (reify-objects (cdr property))))
+                                  (reify-objects (cadr property))))
                         x)
                    ";  ")
       (reify x)))
 
 (define (reify-objects x)
-  (or (reify-special x)
-      (string-join (map (lambda (y) (reify y)) x)
-                   ", ")))
-         
+  (if (pair? x)
+      (or (reify-special x)
+          (string-join (map (lambda (y) (reify y)) x) ", "))
+      (reify x)))
+
+(define (expand-special triple)
+  (case (car triple)
+    ((WHERE) 
+     (cons (car triple) (join (map expand-triples (cdr triple)))))
+    ((|@()| |@[]| MINUS OPTIONAL UNION)
+     (list (cons (car triple) (join (map expand-triples (cdr triple))))))
+    ((GRAPH) (list (append (take triple 2)
+                           (join (map expand-triples (cddr triple))))))
+    (else #f)))
+
+(define (expand-triples triples)
+  (or (expand-special triples)
+      (expand-triple triples)))
+
+(define (expand-triple triple)
+  (match triple
+    ((subject predicates)
+     (let ((subject (car triple)))
+       (join
+        (map (lambda (po-list)
+               (let ((predicate (car po-list)))
+                 (map (lambda (object)
+                        (list subject predicate object))
+                      (cdr po-list))))
+             predicates))))
+    ((subject predicate objects)
+     (if (pair? objects)
+         (map (lambda (object)
+                (list subject predicate object))
+              objects)
+         (list (list subject predicate objects))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RDF convenience functions
 
