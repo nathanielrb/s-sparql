@@ -766,29 +766,32 @@
 (define (expand-special triple)
   (case (car triple)
     ((WHERE) 
-     (cons (car triple) (join (map expand-triple (cdr triple)))))
+     (cons (car triple) (join (map expand-triples (cdr triple)))))
     ((|@()| |@[]| MINUS OPTIONAL UNION)
-     (list (cons (car triple) (join (map expand-triple (cdr triple))))))
+     (list (cons (car triple) (join (map expand-triples (cdr triple))))))
     ((GRAPH) (list (append (take triple 2)
-                           (join (map expand-triple (cddr triple))))))
+                           (join (map expand-triples (cddr triple))))))
     (else #f)))
 
+(define (expand-triples triples)
+  (or (expand-special triples)
+      (expand-triple triple)))
+
 (define (expand-triple triple)
-   (or (expand-special triple)
-       (match triple
-         ((subject predicates)
-          (let ((subject (car triple)))
-            (join
-             (map (lambda (po-list)
-                    (let ((predicate (car po-list)))
-                      (map (lambda (object)
-                             (list subject predicate object))
-                           (cdr po-list))))
-                  predicates))))
-         ((subject predicate . objects)
-          (map (lambda (object)
-                 (list subject predicate object))
-               objects)))))
+  (match triple
+    ((subject predicates)
+     (let ((subject (car triple)))
+       (join
+        (map (lambda (po-list)
+               (let ((predicate (car po-list)))
+                 (map (lambda (object)
+                        (list subject predicate object))
+                      (cdr po-list))))
+             predicates))))
+    ((subject predicate . objects)
+     (map (lambda (object)
+            (list subject predicate object))
+          objects))))
 
 (define *rules* '(((_ mu:uuid) GRAPH:ONE)))
 
@@ -829,27 +832,36 @@
 
 (require-extension sort-combinators)
 
-;; already mapping rewrite so can't group!
-(define (rewrite-faulty group)
+(define (graph-of group)
+  (and (equal? (car group) 'GRAPH)
+       (cadr group)))
+
+;; (define (group-graphs groups)
+;;   (if
+
+(define (add-graph triple)
+  (let ((graph (lookup-rule (car triple) (cadr triple) *rules*)))
+    (if graph
+        `(GRAPH ,graph ,triple)
+        triple)))
+
+(define (join-graphs groups)
+  (map (lambda (group)
+         (if (graph-of (car group))
+             `(GRAPH ,(graph-of (car group))
+                     ,@(join (map cddr group)))
+             group))
+       ((group-by graph-of) groups)))
+
+(define (rewrite group)
   (case (car group)
-    ((WHERE)
-     (cons (car group) (join (map rewrite (cdr group)))
+    ((WHERE) 
+     (cons (car group) (join-graphs (map rewrite (cdr group)))))
     ((|@()| |@[]| MINUS OPTIONAL UNION)
-     (list (cons (car group) (join (map rewrite (cdr group))))))
+     (list (cons (car group) (join-graphs (map rewrite (cdr group))))))
     ((GRAPH) (list (append (take group 2)
                            (join (map rewrite (cddr group))))))
-    (else (let ((triples (expand-triple group)))
-            (let ((graph (lambda (triple)
-                           (cons (lookup-rule (car triple) (cadr triple) *rules*)
-                                 triple))))
-;;              (map (lambda (group)
-              (print (map graph triples))
-              ((group-by car) (map graph triples)))))))
-
-;                     (if graph
- ;                        `(GRAPH ,graph ,triple)
-  ;                       triple)))
-   ;              triples)))))
+    (else (join (map add-graph (expand-triple group))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Tests
