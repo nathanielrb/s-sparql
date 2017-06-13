@@ -685,18 +685,18 @@
 ;; UpdateUnit
 
 (define Query
-  (concatenation
-   (->alist '@Prologue Prologue)
-   (->alist '@Query
-            (alternatives
-             SelectQuery
-             ;; ConstructQuery DescribeQuery AskQuery )
-             ))
-   ;; (->alist '@Values ValuesClause)
-   ))
-;; QueryUnit
-
-
+   (concatenation
+    (->alist '@Prologue Prologue)
+    (->alist '@Query
+             (alternatives
+              SelectQuery
+              ;; ConstructQuery DescribeQuery AskQuery )
+              ))
+    ;; (->alist '@Values ValuesClause)
+    ))
+(define QueryUnit
+ (->alist '@TOP Query))
+ 
 (define (nested-alist-ref alist #!rest keys)
   (nested-alist-ref* alist keys))
 
@@ -851,8 +851,11 @@
 
 (define (rewrite-query query)
   (parameterize ((query-namespaces (query-prefixes t)))
-    (rewrite (query-where query))))
-           
+    (map (lambda (unit)
+           (case (car unit)
+             ((@Query) (rewrite (query-where query)))
+             (else unit)))
+         query)))           
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Tests
@@ -882,7 +885,7 @@ FROM NAMED <http://www.google.com/>
   } 
 ")))
 
-(define t (car (lex Query err "
+(define t (car (lex QueryUnit err "
 PREFIX dc: <http://schema.org/dc/> 
 PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
 SELECT ?a ?b

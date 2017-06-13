@@ -176,36 +176,42 @@
         ((keyword? x) (keyword->string x))
         ((number? x) (number->string x))
         ((symbol? x) (symbol->string x))
-        ((pair? x) (or (reify-special x) 
-                       (if (pair? (car x))
-                           (format #f "{ ~A }" (string-join (map reify x) " "))
-                           (reify-triple x))))))
+        ((pair? x) (or (reify-special x)
+                       (string-join (map reify x) " ")))))
+                       ;; (if (pair? (car x))
+                       ;;    (format #f "{ ~A }" (string-join (map reify x) " "))
+                       ;;    (reify-triple x))))))
 
+;; what about SELECT ?a ?b => commas or spaces?
 (define (reify-special x)
   (case (car x)
-    ((@Prologue @Query @Dataset) (string-join (map reify (cdr x)) "\n"))
-    ((|@()|) (format #f "( ~A )" (string-join (map reify (cdr x)) " ")))
-    ((|@[]|) (format #f "[ ~A ]" (string-join (map reify (cdr x)) " ")))
-    ((UNION) (string-join (map reify (cdr x)) " UNION "))
+    ((@TOP) (string-join (map reify (cdr x)) "\n"))
+    ((@Prologue @Query) (conc (string-join (map reify (cdr x)) "\n") "\n"))
+    ((@Dataset) (string-join (map reify (cdr x)) "\n"))
+    ((|@()|) (format #f "( ~A )" (string-join (map reify-triple (cdr x)) " ")))
+    ((|@[]|) (format #f "[ ~A ]" (string-join (map reify-triple (cdr x)) " ")))
+    ((UNION) (string-join (map reify-triple (cdr x)) " UNION "))
     ((GRAPH) (format #f "GRAPH ~A ~A  "
-                     (reify (cadr x)) (reify (cddr x))))
-    ((WHERE MINUS OPTIONAL) (format #f "~A ~A " (car x) (reify (cdr x))))
+                     (reify (cadr x)) (reify-triple (cddr x))))
+    ((WHERE MINUS OPTIONAL) (format #f "~A ~A " (car x) (reify-triple (cdr x))))
     (else #f)))
 
+;; add optional indent-level for readability
 (define (reify-triple triple)
-  (print "triple " triple)
-  (or (reify-special triple) 
-      (conc
-       (string-join
-        (match triple
-          ((subject properties) 
-           (list (reify subject)
-                 (reify-properties properties)))
-          ((subject predicate . objects)
-           (list (reify subject)
-                 (reify-properties predicate)
-                 (reify-objects objects)))))
-       ". ")))
+  (or (reify-special triple)
+      (if (pair? (car triple)) ;; list of triples
+          (format #f "{~%  ~A ~%}" (string-join (map reify-triple triple) " "))
+          (conc
+           (string-join
+            (match triple
+              ((subject properties) 
+               (list (reify subject)
+                     (reify-properties properties)))
+              ((subject predicate . objects)
+               (list (reify subject)
+                     (reify-properties predicate)
+                     (reify-objects objects)))))
+           ". "))))
 
 (define (reify-properties x)
   (if (pair? x)
