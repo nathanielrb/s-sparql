@@ -185,15 +185,17 @@
 ;; what about SELECT ?a ?b => commas or spaces?
 (define (reify-special x)
   (case (car x)
-    ((@QueryUnit) (string-join (map reify (cdr x)) "\n"))
-    ((@Prologue @Query) (conc (string-join (map reify (cdr x)) "\n") "\n"))
+    ((@Unit) (string-join (map reify (cdr x)) "\n"))
+    ((@Prologue @Query @Update) (conc (string-join (map reify (cdr x)) "\n") "\n"))
     ((@Dataset) (string-join (map reify (cdr x)) "\n"))
     ((|@()|) (format #f "( ~A )" (string-join (map reify-triple (cdr x)) " ")))
     ((|@[]|) (format #f "[ ~A ]" (string-join (map reify-triple (cdr x)) " ")))
     ((UNION) (string-join (map reify-triple (cdr x)) " UNION "))
     ((GRAPH) (format #f "GRAPH ~A ~A  "
                      (reify (cadr x)) (reify-triple (cddr x))))
-    ((WHERE MINUS OPTIONAL) (format #f "~A ~A " (car x) (reify-triple (cdr x))))
+    ((WHERE MINUS OPTIONAL DELETE INSERT
+            |DELETE WHERE| |DELETE DATA| |INSERT WHERE|)
+     (format #f "~A ~A " (car x) (reify-triple (cdr x))))
     (else #f)))
 
 ;; add optional indent-level for readability

@@ -4,8 +4,8 @@
 ;; Example:
 ;; https://code.call-cc.org/svn/chicken-eggs/release/4/json-abnf/trunk/json-abnf.scm
 
-;;(module s-sparql-parser *
-;;(import chicken scheme extras data-structures srfi-1) 
+;; (module s-sparql-parser *
+;; (import chicken scheme extras data-structures srfi-1) 
 
 (use srfi-1 srfi-13 matchable irregex)
 
@@ -590,25 +590,40 @@
 
 ;; GraphOrDefault
 
-;; UsingClause
+(define UsingClause
+  (:: 
+   (lit/sym "USING")
+   (alternatives 
+    iri 
+    (:: (lit/sym "NAMED") iri))))
+  
 
-;; InsertClause
+(define InsertClause
+  (:: 
+   (lit/sym "INSERT")
+   QuadData))
 
-;; Delete Clause
+(define DeleteClause
+  (:: 
+   (lit/sym "DELETE")
+   QuadData))
 
-;;(define Modify
-;;  (:: (:? (:: (lit/sp "WITH") iri))
-;;      (alternatives (:: DeleteClause (:? InsertClause))
-;;                    InsertClause)
-;;      (:* UsingClause)
-;;      (lit/sp "WHERE")
-;;      GroupGraphPattern))
+(define Modify
+  (:: (:? (->list (:: (lit/sym "WITH") iri)))
+      (->list (alternatives (:: DeleteClause
+                                (:? InsertClause))
+                            InsertClause))
+      ;;(:* UsingClause)
+      (->list
+       (::
+        (lit/sym "WHERE")
+        GroupGraphPattern))))
 
 (define DeleteWhere
   (:: 
    (bind-consumed->symbol
     (::
-     (lit/sp "DELETE")
+     (lit/sp "DELETE ")
      (drop-consumed fws)
      (lit/sp "WHERE")))
    QuadData))
@@ -617,7 +632,7 @@
   (:: 
    (bind-consumed->symbol
     (::
-     (lit/sp "DELETE")
+     (lit/sp "DELETE ")
      (drop-consumed fws)
      (lit/sp "DATA")))
    QuadData))
@@ -626,7 +641,7 @@
   (:: 
    (bind-consumed->symbol
     (::
-     (lit/sp "INSERT")
+     (lit/sp "INSERT ")
      (drop-consumed fws)
      (lit/sp "DATA")))
    QuadData))
@@ -647,13 +662,13 @@
 
 (define Update1
   (alternatives ;;Load Clear Drop Add Move Copy Create 
-   InsertData DeleteData DeleteWhere))
-;; Modify))
+   InsertData DeleteData DeleteWhere Modify))
 
 (define Update
   (vac
-   (:: Prologue
-       (:? (:: Update1 (:? (:: (char-list/lit ";") Update)))))))
+   (:: (->alist '@Prologue Prologue)
+       (->alist '@Update
+                (:? (:: Update1 (:? (:: (char-list/lit ";") Update))))))))
 
 ;; ValuesClause
 
@@ -738,14 +753,15 @@
     (bind-consumed->symbol
      (between-fws IRIREF)))))
 
-;; BaseDecl
+;;  BaseDecl
 
 (define Prologue
-  ;;(bind-consumed-values->alist
-   ;;'*PROLOGUE*
+  ;; (bind-consumed-values->alist
+  ;;'*PROLOGUE*
    (repetition PrefixDecl))
 
-(define UpdateUnit Update)
+(define UpdateUnit
+(->alist '@Unit  Update))
 
 (define Query
    (concatenation
@@ -759,7 +775,7 @@
     ))
 
 (define QueryUnit
-  (->alist '@QueryUnit Query))
+  (->alist '@Unit Query))
 
 (define TopLevel (alternatives QueryUnit UpdateUnit))
 
@@ -784,7 +800,7 @@
 
 
 (define (query-prologue QueryUnit)
-  (nested-alist-ref QueryUnit '@QueryUnit '@Prologue))
+  (nested-alist-ref QueryUnit '@Unit '@Prologue))
 
 (define (PrefixDecl? decl) (equal? (car decl) 'PREFIX))
 
@@ -796,10 +812,10 @@
      (substring s 0 (- (string-length s) len)))))
 
 (define (query-dataset QueryUnit)
-  (nested-alist-ref QueryUnit '@QueryUnit '@Query '@Dataset))
+  (nested-alist-ref QueryUnit '@Unit '@Query '@Dataset))
 
 (define (query-query QueryUnit)
-  (nested-alist-ref QueryUnit '@QueryUnit '@Query))
+  (nested-alist-ref QueryUnit '@Unit '@Query))
 
 (define (query-select QueryUnit)
   (assoc 'SELECT (query-query QueryUnit)))
@@ -817,7 +833,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Tests
 
-(define r (car (lex Query err "PREFIX pre: <http://www.home.com/> 
+(define r (parse-query "PREFIX pre: <http://www.home.com/> 
                   PREFIX pre: <http://www.gooogle.com/> 
 SELECT ?a ?a
 FROM <http://www.google.com/>
@@ -828,9 +844,9 @@ FROM NAMED <http://www.google.com/>
     ?p ?x ?x, ?zoop  .
      ?p ?z ?l, ?m, ?o; ?zan ?zim, ?zing, ?zot;
   } 
-")))
+"))
 
-(define s (car (lex Query err "PREFIX pre: <http://www.home.com/> 
+(define s (parse-query "PREFIX pre: <http://www.home.com/> 
                   PREFIX rdf: <http://www.gooogle.com/> 
 SELECT ?a ?a
 FROM <http://www.google.com/>
@@ -838,7 +854,7 @@ FROM NAMED <http://www.google.com/>
   WHERE {
      GRAPH ?g { ?s ?p ?o }
   } 
-")))
+"))
 
 (define t (parse-query ;; (car (lex QueryUnit err "
 "PREFIX dc: <http://schema.org/dc/> 
@@ -858,7 +874,6 @@ FROM NAMED <http://www.google.com/app>
 (define u (parse-query ;; (car (lex QueryUnit err "
 "PREFIX dc: <http://schema.org/dc/> 
 PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-SELECT ?a ?b
 
 DELETE WHERE {
    ?a mu:uuid ?b . ?c mu:uuid ?e . ?f ?g ?h
@@ -866,4 +881,20 @@ DELETE WHERE {
 
 "))
 
-;;)
+
+(define vs
+"PREFIX dc: <http://schema.org/dc/> 
+PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+
+DELETE {
+   ?a mu:uuid ?b, ?c, ?d . ?c mu:uuid ?e . ?f ?g ?h
+  } 
+WHERE {
+  ?s ?p ?o
+}
+
+")
+
+(define v (parse-query vs))
+(use s-sparql)
+;; )
