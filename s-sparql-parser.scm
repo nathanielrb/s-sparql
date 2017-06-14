@@ -4,9 +4,8 @@
 ;; Example:
 ;; https://code.call-cc.org/svn/chicken-eggs/release/4/json-abnf/trunk/json-abnf.scm
 
-(module s-sparql-parser *
-
-(import chicken scheme extras data-structures srfi-1) 
+;;(module s-sparql-parser *
+;;(import chicken scheme extras data-structures srfi-1) 
 
 (use srfi-1 srfi-13 matchable irregex)
 
@@ -453,13 +452,22 @@
 (define Verb (alternatives VarOrIri (lit/sym "a")))
 
 (define PropertyListNotEmpty
-  (:: Verb ObjectList
-      (:* (:: (drop-consumed (lit/sp ";"))
-              (:? (:: Verb ObjectList))))))
+  (->list
+   (:: (->list 
+        (:: (between-fws Verb)
+            ObjectList))
+       (:* (:: (drop-consumed (lit/sp ";"))
+               (:? (->list
+                    (:: (between-fws Verb)
+                        ObjectList))))))))
 
-;; PropertyList
+(define PropertyList (:? PropertyListNotEmpty))
 
-;; TriplesSameSubject
+(define TriplesSameSubject
+  (alternatives (:: (between-fws VarOrTerm)
+                    (between-fws PropertyListNotEmpty))
+                (:: (between-fws TriplesNode)
+                    (between-fws PropertyList))))
 
 ;; ConstructTriples
 
@@ -524,7 +532,7 @@
 
 (define TriplesBlock
   (vac
-   (:: (bind-consumed-values->list
+   (:: (->list
 	TriplesSameSubjectPath)
        (:? (:: (drop-consumed (lit/sp "."))
 	       (:? TriplesBlock))))))
@@ -539,21 +547,40 @@
 
 (define GroupGraphPattern 
   (vac
-   ;; (->list
-   ;; '|@{}|
     (:: (drop-consumed (lit/sp "{"))
         (alternatives
          ;; SubSelect
          GroupGraphPatternSub)
         (drop-consumed (lit/sp "}")))))
 
-;; TriplesTemplate
+(define TriplesTemplate
+  (vac
+   (::
+    (->list TriplesSameSubject)
+    (:? (:: (drop-consumed (lit/sp "."))
+            (:? TriplesTemplate))))))
+  
+(define QuadsNotTriples
+  (::
+   (lit/sym "GRAPH")
+   VarOrIri
+   (:: (drop-consumed (lit/sp "{"))
+       (:? TriplesTemplate)
+       (drop-consumed (lit/sp "}")))))
 
-;; QuadsNotTriples
+(define Quads
+  (::
+   (:? TriplesTemplate)
+   (:* (::
+        QuadsNotTriples
+        (:? (drop-consumed (lit/sp ".")))
+        (:? TriplesTemplate)))))
 
-;; Quads
+(define QuadData
+  (:: (drop-consumed (lit/sp "{"))
+      Quads
+      (drop-consumed (lit/sp "}"))))
 
-;; QuadData
 
 ;; QuadPattern
 
@@ -569,13 +596,40 @@
 
 ;; Delete Clause
 
-;; Modify
+;;(define Modify
+;;  (:: (:? (:: (lit/sp "WITH") iri))
+;;      (alternatives (:: DeleteClause (:? InsertClause))
+;;                    InsertClause)
+;;      (:* UsingClause)
+;;      (lit/sp "WHERE")
+;;      GroupGraphPattern))
 
-;; DeleteWhere
+(define DeleteWhere
+  (:: 
+   (bind-consumed->symbol
+    (::
+     (lit/sp "DELETE")
+     (drop-consumed fws)
+     (lit/sp "WHERE")))
+   QuadData))
 
-;; DeleteData
+(define DeleteData 
+  (:: 
+   (bind-consumed->symbol
+    (::
+     (lit/sp "DELETE")
+     (drop-consumed fws)
+     (lit/sp "DATA")))
+   QuadData))
 
-;; InsertData
+(define InsertData
+  (:: 
+   (bind-consumed->symbol
+    (::
+     (lit/sp "INSERT")
+     (drop-consumed fws)
+     (lit/sp "DATA")))
+   QuadData))
 
 ;; Copy
 
@@ -591,9 +645,15 @@
 
 ;; Load
 
-;; Update1
+(define Update1
+  (alternatives ;;Load Clear Drop Add Move Copy Create 
+   InsertData DeleteData DeleteWhere))
+;; Modify))
 
-;; Update
+(define Update
+  (vac
+   (:: Prologue
+       (:? (:: Update1 (:? (:: (char-list/lit ";") Update)))))))
 
 ;; ValuesClause
 
@@ -685,7 +745,7 @@
    ;;'*PROLOGUE*
    (repetition PrefixDecl))
 
-;; UpdateUnit
+(define UpdateUnit Update)
 
 (define Query
    (concatenation
@@ -701,10 +761,12 @@
 (define QueryUnit
   (->alist '@QueryUnit Query))
 
+(define TopLevel (alternatives QueryUnit UpdateUnit))
+
 ;; should also read from ports
 (define (parse-query query)
   ;;(cons '@TOP
-  (car (lex QueryUnit err query)))
+  (car (lex TopLevel err query)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Accessors
@@ -793,4 +855,15 @@ FROM NAMED <http://www.google.com/app>
 
 "))
 
-)
+(define u (parse-query ;; (car (lex QueryUnit err "
+"PREFIX dc: <http://schema.org/dc/> 
+PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+SELECT ?a ?b
+
+DELETE WHERE {
+   ?a mu:uuid ?b . ?c mu:uuid ?e . ?f ?g ?h
+  } 
+
+"))
+
+;;)
