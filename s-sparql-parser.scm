@@ -376,7 +376,7 @@
   (vac
     (alternatives
      iri
-     (lit/sp "a")
+     (lit/sym "a")
      ;; (:: (char-list/lit "!") PathNegatedPropertySet) ;; ** !!
      (:: (lit/sp "(") Path (lit/sp ")")))))
 
