@@ -264,7 +264,7 @@
          (list (list subject predicate objects))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; RDF convenience functions
+;; RDF Convenience Functions
 
 (define (s-triple triple)
   (if (string? triple)
@@ -272,7 +272,7 @@
       (reify-triple triple)))
 
 (define (s-triples trips)
-  (string-join (map s-triple trips) ".\n"))
+  (string-join (map s-triple trips) "\n"))
 
 (define (triple a b c)
   (s-triple (list a b c)))

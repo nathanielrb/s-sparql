@@ -18,13 +18,13 @@ To start with a simple example of writing triples:
 (define-namespace schema "http://schema.org/")
 (define-namespace dc "http://purl.org/dc/elements/1.1/")
 
-(*default-graph* `<http://example.com/application>)
-
 (define triples
   `((app:entity1 ((a schema:Person)
                   (dc:title "Mr Director")))
     (app:entity2 <http://example.com/application/age> 45)
-    (app:entity3 <http://example.com/application/likes> (<http://example.com/application/concepts/candy> <http://example.com/application/concepts/apples>))))
+    (app:entity3 <http://example.com/application/likes> 
+                 (<http://example.com/application/concepts/candy>
+                  <http://example.com/application/concepts/apples>))))
 
 (print (s-triples query))
 
@@ -37,6 +37,8 @@ To start with a simple example of writing triples:
 and querying SPARQL endpoints: 
 
 ```
+(*default-graph* `<http://example.com/application>)
+
 (print (s-insert (s-triples triples)))
 
 ;; => WITH <http://example.com/application> 
