@@ -1,8 +1,8 @@
 (compile -s -O3 -d1 s-sparql.scm -j s-sparql)
 (compile -s s-sparql.import.scm -O3 -d0)
 
-;; (compile -s -O3 -d1 s-sparql-parser.scm -j s-sparql-parser)
-;; (compile -s s-sparql-parser.import.scm -O3 -d0)
+(compile -s -O3 -d1 s-sparql-parser.scm -j s-sparql-parser)
+(compile -s s-sparql-parser.import.scm -O3 -d0)
 
 (install-extension
 
@@ -10,7 +10,7 @@
  's-sparql
 
  ;; Files to install for your extension:
- '("s-sparql.so" "s-sparql.import.so") ;; "s-sparql-parser.so" "s-sparql-parser.import.so") 
+ '("s-sparql.so" "s-sparql.import.so" "s-sparql-parser.so" "s-sparql-parser.import.so") 
 
  ;; Assoc list with properties for your extension:
  '((version "0.1")))

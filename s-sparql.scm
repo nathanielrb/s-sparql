@@ -13,8 +13,7 @@
            (string->symbol uri))))
 
 (define *default-graph*
-  (make-parameter
-   '<http://mu.semte.ch/application>))
+  (make-parameter #f))
 
 ;; what about Docker?
 (define *sparql-endpoint*
@@ -233,17 +232,17 @@
 
 (define (expand-special triple)
   (case (car triple)
-    ((WHERE) 
-     (cons (car triple) (join (map expand-triples (cdr triple)))))
+    ((WHERE DELETE INSERT) 
+     (cons (car triple) (expand-triples (cdr triple))))
     ((|@()| |@[]| MINUS OPTIONAL UNION)
-     (list (cons (car triple) (join (map expand-triples (cdr triple))))))
+     (list (cons (car triple) (expand-triples (cdr triple)))))
     ((GRAPH) (list (append (take triple 2)
-                           (join (map expand-triples (cddr triple))))))
+                           (expand-triples (cddr triple)))))
     (else #f)))
 
 (define (expand-triples triples)
   (or (expand-special triples)
-      (expand-triple triples)))
+      (join (map expand-triple triples))))
 
 (define (expand-triple triple)
   (match triple
@@ -252,9 +251,11 @@
        (join
         (map (lambda (po-list)
                (let ((predicate (car po-list)))
-                 (map (lambda (object)
-                        (list subject predicate object))
-                      (cdr po-list))))
+                 (if (pair? (cadr po-list))
+                     (map (lambda (object)
+                            (list subject predicate object))
+                          (cadr po-list))
+                     (list (list subject predicate (cadr po-list))))))
              predicates))))
     ((subject predicate objects)
      (if (pair? objects)

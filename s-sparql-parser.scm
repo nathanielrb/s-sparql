@@ -4,13 +4,13 @@
 ;; Example:
 ;; https://code.call-cc.org/svn/chicken-eggs/release/4/json-abnf/trunk/json-abnf.scm
 
-;; (module s-sparql-parser *
-;; (import chicken scheme extras data-structures srfi-1) 
+(module s-sparql-parser *
+(import chicken scheme extras data-structures srfi-1) 
 
 (use srfi-1 srfi-13 matchable irregex)
 
 (require-extension typeclass input-classes abnf abnf-charlist abnf-consumers
-                   sort-combinators lexgen)
+                   lexgen)
 
 (define char-list-<Input>
   (make-<Input> null? car cdr))
@@ -610,9 +610,11 @@
 
 (define Modify
   (:: (:? (->list (:: (lit/sym "WITH") iri)))
-      (->list (alternatives (:: DeleteClause
-                                (:? InsertClause))
-                            InsertClause))
+      (->list
+       (alternatives 
+        (:: DeleteClause
+            (:? InsertClause))
+        InsertClause))
       ;;(:* UsingClause)
       (->list
        (::
@@ -620,31 +622,34 @@
         GroupGraphPattern))))
 
 (define DeleteWhere
-  (:: 
-   (bind-consumed->symbol
-    (::
-     (lit/sp "DELETE ")
-     (drop-consumed fws)
-     (lit/sp "WHERE")))
-   QuadData))
+  (->list
+   (:: 
+    (bind-consumed->symbol
+     (::
+      (lit/sp "DELETE ")
+      (drop-consumed fws)
+      (lit/sp "WHERE")))
+    QuadData)))
 
 (define DeleteData 
-  (:: 
-   (bind-consumed->symbol
-    (::
-     (lit/sp "DELETE ")
-     (drop-consumed fws)
-     (lit/sp "DATA")))
-   QuadData))
+  (->list
+   (:: 
+    (bind-consumed->symbol
+     (::
+      (lit/sp "DELETE ")
+      (drop-consumed fws)
+      (lit/sp "DATA")))
+    QuadData)))
 
 (define InsertData
-  (:: 
-   (bind-consumed->symbol
-    (::
-     (lit/sp "INSERT ")
-     (drop-consumed fws)
-     (lit/sp "DATA")))
-   QuadData))
+  (->list
+   (:: 
+    (bind-consumed->symbol
+     (::
+      (lit/sp "INSERT ")
+      (drop-consumed fws)
+      (lit/sp "DATA")))
+    QuadData)))
 
 ;; Copy
 
@@ -791,44 +796,43 @@
   (nested-alist-ref* alist keys))
 
 (define (nested-alist-ref* alist keys)
-  (and keys
+  (and keys       
        (if (null? keys)
            alist
-           (nested-alist-ref*
-            (alist-ref (car keys) alist)
-            (cdr keys)))))
+           (let ((nested (alist-ref (car keys) alist)))
+             (and nested
+                  (nested-alist-ref* nested (cdr keys)))))))
 
+(define (assoc-when sym alist)
+  (and alist
+      (assoc sym alist)))
 
-(define (query-prologue QueryUnit)
+(define (unit-prologue QueryUnit)
   (nested-alist-ref QueryUnit '@Unit '@Prologue))
 
-(define (PrefixDecl? decl) (equal? (car decl) 'PREFIX))
-
-(define (BaseDecl? decl) (equal? (car decl) 'BASE))
-
-(define (remove-trailing-char sym #!optional (len 1))
-  (let ((s (symbol->string sym)))
-    (string->symbol
-     (substring s 0 (- (string-length s) len)))))
-
-(define (query-dataset QueryUnit)
-  (nested-alist-ref QueryUnit '@Unit '@Query '@Dataset))
-
-(define (query-query QueryUnit)
+(define (unit-query QueryUnit)
   (nested-alist-ref QueryUnit '@Unit '@Query))
 
-(define (query-select QueryUnit)
-  (assoc 'SELECT (query-query QueryUnit)))
+(define (unit-query-dataset QueryUnit)
+  (nested-alist-ref QueryUnit '@Unit '@Query '@Dataset))
 
-(define (query-dataset QueryUnit)
-  (alist-ref '@Dataset (query-query QueryUnit)))
+(define (unit-query-select QueryUnit)
+  (assoc-when 'SELECT (nested-alist-ref QueryUnit '@Unit '@Query)))
 
-(define (query-where QueryUnit)
-  (assoc 'WHERE (query-query QueryUnit)))
+(define (unit-query-where QueryUnit)
+  (assoc-when 'WHERE (nested-alist-ref QueryUnit '@Unit '@Query)))
 
-(define (graph-of group)
-  (and (equal? (car group) 'GRAPH)
-       (cadr group)))
+(define (unit-update QueryUnit)
+  (nested-alist-ref QueryUnit '@Unit '@Update))
+
+(define (unit-update-delete QueryUnit)
+  (assoc-when 'DELETE (unit-update QueryUnit)))
+
+(define (unit-update-where QueryUnit)
+  (assoc-when 'WHERE (unit-update QueryUnit)))
+
+(define (unit-update-insert QueryUnit)
+  (assoc-when 'INSERT (unit-update QueryUnit)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Tests
@@ -897,4 +901,5 @@ WHERE {
 
 (define v (parse-query vs))
 (use s-sparql)
-;; )
+
+)
