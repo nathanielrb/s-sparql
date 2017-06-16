@@ -98,8 +98,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; data types
 
-(define (new-sparql-variable)
-  (string->symbol (conc "?" (->string (gensym)))))
+(define (new-sparql-variable #!optional (prefix "v"))
+  (string->symbol (conc "?" (->string (gensym prefix)))))
 
 (define (sparql-variable str)
   (string->symbol (conc "?" (->string str))))
@@ -364,11 +364,12 @@
 		  (with-input-from-request 
 		   (make-request method: 'POST
 				 uri: (uri-reference endpoint)
-				 headers: (headers '((content-type application/sparql-update))))
+				 headers: (headers '((content-type application/sparql-update)
+                                                     (Accept application/json))))
 		   (add-prefixes query)
-		   read-string)))
+		   read-json)))
       (close-connection! uri)
-      response)))
+      result)))
 
 (define (sparql/select-unique query #!optional raw?)
   (car-when (sparql/select query raw?)))

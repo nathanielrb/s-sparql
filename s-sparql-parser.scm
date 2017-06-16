@@ -520,9 +520,9 @@
 
 (define OptionalGraphPattern
   (vac
-   (:: (lit/sym "OPTIONAL")
-       VarOrIri
-       GroupGraphPattern)))
+   (->list
+    (:: (lit/sym "OPTIONAL")
+        GroupGraphPattern))))
 
 (define GraphPatternNotTriples
   (alternatives GroupOrUnionGraphPattern
@@ -609,7 +609,7 @@
    QuadData))
 
 (define Modify
-  (:: (:? (->list (:: (lit/sym "WITH") iri)))
+  (:: (:? (->alist '@Dataset (:: (lit/sym "WITH") iri)))
       (->list
        (alternatives 
         (:: DeleteClause
