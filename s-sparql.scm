@@ -175,6 +175,7 @@
         ((keyword? x) (keyword->string x))
         ((number? x) (number->string x))
         ((symbol? x) (symbol->string x))
+        ((boolean? x) (if x "true" "false"))
         ((pair? x) (or (reify-special x)
                        (string-join (map reify x) " ")))))
                        ;; (if (pair? (car x))
