@@ -1,5 +1,4 @@
 (module s-sparql *
-
 (import chicken scheme extras data-structures srfi-1) 
 
 (use srfi-13 http-client intarweb uri-common medea matchable irregex)
@@ -109,6 +108,14 @@
        (or (equal? "?" (substring (->string obj) 0 1))
            (equal? "$" (substring (->string obj) 0 1)))))
 
+(define (iri? obj)
+  (and (symbol? obj)
+       (not (sparql-variable? obj))
+       (not (a? obj))))
+
+(define (a? obj)
+  (equal? 'a obj))
+
 (define (un-sparql-variable var)
   (string->symbol (substring (symbol->string var) 1)))
 
@@ -170,66 +177,78 @@
 (define (range n)
   (list-tabulate n values))
 
-(define (reify x)
+(define (write-sparql x #!optional (level 0))
   (cond ((string? x) (conc "\"" x "\""))
         ((keyword? x) (keyword->string x))
         ((number? x) (number->string x))
         ((symbol? x) (symbol->string x))
         ((boolean? x) (if x "true" "false"))
-        ((pair? x) (or (reify-special x)
-                       (string-join (map reify x) " ")))))
-                       ;; (if (pair? (car x))
-                       ;;    (format #f "{ ~A }" (string-join (map reify x) " "))
-                       ;;    (reify-triple x))))))
+        ((pair? x) (or (write-sparql-special x)
+                       (string-join (map (cut write-sparql <> (+ level 1))
+					 x)
+				    " ")))))
 
-;; what about SELECT ?a ?b => commas or spaces?
-(define (reify-special x)
-  (case (car x)
-    ((@Unit) (string-join (map reify (cdr x)) "\n"))
-    ((@Prologue @Query @Update) (conc (string-join (map reify (cdr x)) "\n") "\n"))
-    ((@Dataset) (string-join (map reify (cdr x)) "\n"))
-    ((|@()|) (format #f "( ~A )" (string-join (map reify-triple (cdr x)) " ")))
-    ((|@[]|) (format #f "[ ~A ]" (string-join (map reify-triple (cdr x)) " ")))
-    ((UNION) (string-join (map reify-triple (cdr x)) " UNION "))
-    ((GRAPH) (format #f "GRAPH ~A ~A  "
-                     (reify (cadr x)) (reify-triple (cddr x))))
-    ((WHERE MINUS OPTIONAL DELETE INSERT
-            |DELETE WHERE| |DELETE DATA| |INSERT WHERE|)
-     (format #f "~A ~A " (car x) (reify-triple (cdr x))))
-    (else #f)))
+(define (write-sparql-special x #!optional (level 0))
+  (let ((pre (apply conc (make-list level " "))))
+    (case (car x)
+      ((@Unit) (string-join (map write-sparql (cdr x)) "\n"))
+      ((@Prologue @Query @Update) (conc (string-join (map write-sparql (cdr x)) "\n") "\n"))
+      ((@Dataset) (string-join (map write-sparql (cdr x)) "\n"))
+      ((|@()|) (format #f "( ~A )" (string-join (map
+						 (cut write-sparql-triple <> (+ level 1))
+						 (cdr x)) " ")))
+      ((|@[]|) (format #f "[ ~A ]" (string-join (map write-sparql-triple (cdr x)) " ")))
+      ((UNION)     
+       (conc pre
+	     (string-join  (map (cut write-sparql-triple <> (+ level 1)) (cdr x))
+			   (format #f "~%~AUNION " pre))))
+      ((GRAPH) (format #f "~AGRAPH ~A ~A  "
+		       pre (write-sparql (cadr x))
+		       (write-sparql-triple (cddr x) (+ level 1))))
+      ((WHERE MINUS OPTIONAL DELETE INSERT
+	      |DELETE WHERE| |DELETE DATA| |INSERT WHERE|)
+       (format #f "~A~A ~A" pre (car x) (write-sparql-triple (cdr x) (+ level 1))))
+      (else #f))))
 
 ;; add optional indent-level for readability
-(define (reify-triple triple)
-  (or (reify-special triple)
-      (if (pair? (car triple)) ;; list of triples
-          (format #f "{~%  ~A ~%}" (string-join (map reify-triple triple) " "))
-          (conc
-           (string-join
-            (match triple
-              ((subject properties) 
-               (list (reify subject)
-                     (reify-properties properties)))
-              ((subject predicate objects)
-               (list (reify subject)
-                     (reify-properties predicate)
-                     (reify-objects objects)))))
-           ". "))))
+(define (write-sparql-triple triple #!optional (level 0))
+  (or (write-sparql-special triple level)
+      (let ((pre (apply conc (make-list level " "))))
+	(if (pair? (car triple)) ;; list of triples
 
-(define (reify-properties x)
+	    ;; abstract the spacing
+	    ;; and think about singletons : { a b c. }
+	    (format #f "{~%~A~%~A}"
+		    (string-join (map (cut write-sparql-triple <> (+ level 1)) triple) "\n")
+		    pre)
+	    (conc
+	     pre
+	     (string-join
+	      (match triple
+		((subject properties) 
+		 (list (write-sparql subject)
+		       (write-sparql-properties properties)))
+		((subject predicate objects)
+		 (list (write-sparql subject)
+		       (write-sparql-properties predicate)
+		       (write-sparql-objects objects)))))
+	     ".")))))
+
+(define (write-sparql-properties x)
   (if (pair? x)
       (string-join (map (lambda (property)
                           (format #f "~A ~A"
-                                  (reify (car property))
-                                  (reify-objects (cadr property))))
+                                  (write-sparql (car property))
+                                  (write-sparql-objects (cadr property))))
                         x)
                    ";  ")
-      (reify x)))
+      (write-sparql x)))
 
-(define (reify-objects x)
+(define (write-sparql-objects x)
   (if (pair? x)
-      (or (reify-special x)
-          (string-join (map (lambda (y) (reify y)) x) ", "))
-      (reify x)))
+      (or (write-sparql-special x)
+          (string-join (map (lambda (y) (write-sparql y)) x) ", "))
+      (write-sparql x)))
 
 (define (expand-special triple)
   (case (car triple)
@@ -274,7 +293,7 @@
 (define (s-triple triple)
   (if (string? triple)
       triple
-      (reify-triple triple)))
+      (write-sparql-triple triple)))
 
 (define (s-triples trips)
   (string-join (map s-triple trips) "\n"))
@@ -291,7 +310,7 @@
 (define (s-graph graph statements)
   (if graph
       (format #f "GRAPH ~A { ~A } ."
-              (reify graph)
+              (write-sparql graph)
               statements)
       statements))
 
