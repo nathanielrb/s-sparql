@@ -206,7 +206,7 @@
 		       pre (write-sparql (cadr x))
 		       (write-sparql-triple (cddr x) (+ level 1))))
       ((WHERE MINUS OPTIONAL DELETE INSERT
-	      |DELETE WHERE| |DELETE DATA| |INSERT WHERE|)
+	      |DELETE WHERE| |DELETE DATA| |INSERT DATA|)
        (format #f "~A~A ~A" pre (car x) (write-sparql-triple (cdr x) (+ level 1))))
       (else #f))))
 

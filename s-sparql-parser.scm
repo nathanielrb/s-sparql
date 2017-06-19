@@ -5,7 +5,7 @@
 ;; https://code.call-cc.org/svn/chicken-eggs/release/4/json-abnf/trunk/json-abnf.scm
 
 (module s-sparql-parser *
-(import chicken scheme extras data-structures srfi-1) 
+  (import chicken scheme extras data-structures srfi-1) 
 
 (use srfi-1 srfi-13 matchable irregex)
 
@@ -167,6 +167,20 @@
    char-list/alpha)) ;; **
 
 ;; STRING_LITERAL_LONG2/LONG1/1/2
+;; simplified 
+
+(define STRING_LITERAL1
+  (:: (char-list/lit "\"")
+      (:+ (alternatives char-list/alpha
+                        char-list/decimal))
+      (char-list/lit "\"")))
+
+(define STRING_LITERAL2
+  (:: (char-list/lit "'")
+      (:+ (alternatives char-list/alpha
+                        char-list/decimal))
+      (char-list/lit "'")))
+
 
 ;; Exponent
 
@@ -223,8 +237,9 @@
    (repetition1 
     (alternatives ;; should be list-from-string
      char-list/alpha
-     (char-list/lit ".")
-     (char-list/lit "/")))
+     char-list/decimal
+     (set-from-string "-_&?#./")))
+;     (char-list/lit "/")))
    (char-list/lit ">")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -244,12 +259,18 @@
    PrefixedName))
 
 (define String
-  (alternatives
-   (::  (char-list/lit "'")
+  (bind-consumed->string
+   (alternatives
+    (:: (drop-consumed (char-list/lit "\""))
 	(repetition
 	 (alternatives
 	  STRINGCHAR ECHAR))
-	(char-list/lit "'"))))
+        (drop-consumed (char-list/lit "\"")))
+   (:: (drop-consumed (char-list/lit "'"))
+	(repetition
+	 (alternatives
+	  STRINGCHAR ECHAR))
+        (drop-consumed (char-list/lit "'"))))))
 
 (define BooleanLiteral
    (alternatives
@@ -376,7 +397,9 @@
   (vac
     (alternatives
      iri
-     (lit/sym "a")
+     (bind-consumed->symbol 
+      (char-list/lit "a"))
+     ;;(lit/sym "a")
      ;; (:: (char-list/lit "!") PathNegatedPropertySet) ;; ** !!
      (:: (lit/sp "(") Path (lit/sp ")")))))
 
@@ -385,7 +408,8 @@
 
 (define PathEltOrInverse
   (vac
-   (alternatives PathElt (:: (char-list/lit "^") PathElt))))
+   (alternatives PathElt 
+                 (:: (char-list/lit "^") PathElt))))
 
 (define PathElt
    (:: PathPrimary (:? PathMod)))
@@ -615,7 +639,7 @@
         (:: DeleteClause
             (:? InsertClause))
         InsertClause))
-      ;;(:* UsingClause)
+      (->alist '@Using (:* UsingClause))
       (->list
        (::
         (lit/sym "WHERE")
