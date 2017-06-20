@@ -71,6 +71,15 @@
     ((_ label p)      (bind (consumed-values->list label)  p))
     ))
 
+(define consumed-chars->number
+  (consumed-chars->list 
+   (compose string->number list->string)))
+
+(define-syntax ->number
+  (syntax-rules () 
+    ((_ p)    (bind consumed-chars->number p))
+    ))
+
 (define fws
   (concatenation
    (optional-sequence 
@@ -78,13 +87,17 @@
      (repetition char-list/wsp)
      (drop-consumed 
       (alternatives char-list/crlf char-list/lf char-list/cr))))
-   (repetition char-list/wsp)))
+   (optional-sequence
+    (repetition char-list/wsp))))
 ;;   (repetition char-list/wsp)))
 
 (define (between-fws p)
   (concatenation
-   (drop-consumed (optional-sequence fws)) p 
-   (drop-consumed (optional-sequence fws))))
+   (optional-sequence (drop-consumed fws)) 
+   ;; (drop-consumed (optional-sequence fws)) 
+   p
+   (optional-sequence (drop-consumed fws)) ))
+;;(drop-consumed (optional-sequence fws))))
 
 (define (err s)
   (print "lexical error on stream: " s)
@@ -186,21 +199,34 @@
 
 ;; DOUBLE_NEGATIVE
 
-;; DECIMAL_NEGATIVE
+(define DECIMAL_NEGATIVE
+  (vac
+   (:: (lit/sym "-") DECIMAL)))
 
-;; INTEGER_NEGATIVE
+(define INTEGER_NEGATIVE
+  (vac
+   (:: (lit/sym "-") INTEGER)))
 
 ;; DOUBLE_POSITIVE
 
-;; DECIMAL_POSITIVE
+(define DECIMAL_POSITIVE
+  (vac
+   (:: (lit/sym "+") DECIMAL)))
 
-;; INTEGER_POSITIVE
+(define INTEGER_POSITIVE
+  (vac
+   (:: (lit/sym "+") INTEGER)))
 
 ;; DOUBLE
 
-;; DECIMAL
+(define DECIMAL
+  (->number
+   (:: 
+    (:* char-list/decimal)
+    (char-list/lit ".")
+    (:+ char-list/decimal))))
 
-;; INTEGER
+(define INTEGER (->number (:+ char-list/decimal)))
 
 ;; LANGTAG
 
@@ -255,7 +281,8 @@
 (define iri
   (alternatives 
    (bind-consumed->symbol
-    (between-fws IRIREF))
+    (between-fws IRIREF)) ;; whitespace...
+    ;; IRIREF)
    PrefixedName))
 
 (define String
@@ -277,56 +304,224 @@
     (lit/sp "true")
     (lit/sp "false")))
 
-;; NUMERICLITERALNEGATIVE/Positive/Unsigned
+(define NumericLiteralUnsigned
+  (alternatives INTEGER DECIMAL)) ;; DOUBLE
+
+(define NumericLiteralPositive
+  (alternatives INTEGER_POSITIVE DECIMAL_POSITIVE)) ;; DOUBLE_POSITIVE))
+
+(define	NumericLiteralNegative 
+  (alternatives INTEGER_NEGATIVE DECIMAL_NEGATIVE)) ;; DOUBLE_NEGATIVE))
 
 (define NumericLiteral
-   (::
-    (:? (alternatives
-	 (char-list/lit "-")
-	 (char-list/lit "+")))
-    (:* char-list/decimal)
-    (:? (char-list/lit "+"))
-    (:+ char-list/decimal)))
+  (alternatives NumericLiteralUnsigned NumericLiteralPositive NumericLiteralNegative))
 
 (define RDFLiteral
   (:: String)) ;; ( LANGTAG | ( '^^' iri ) )?
 
-;; iriOrFunction
+(define iriOrFunction
+  (vac
+   (:: iri (:? ArgList))))
 
-;; Aggregate
+(define (bracketted-function label content)
+  (vac
+   (->list 
+    (:: (lit/sym label)
+        (drop-consumed (lit/sp "("))
+        content
+        (drop-consumed (lit/sp ")"))))))
 
-;; NotExistsFunction
+(define (aggregate-expression label content)
+  (vac
+   (bracketted-function label
+                        (:: (:? (lit/sym "DISTINCT")) 
+                            content))))
 
-;; ExistsFunc
+(define Aggregate
+  (vac
+   (alternatives
+    (aggregate-expression "COUNT" (alternatives (lit/sym "*") 
+                                                Expression))
+    (aggregate-expression "SUM" Expression)
+    (aggregate-expression "MIN" Expression)
+    (aggregate-expression "MAX" Expression)
+    (aggregate-expression "AVG" Expression)
+    (aggregate-expression "SAMPLE" Expression)
+    (aggregate-expression "GROUP_CONCAT"
+                          (:: Expression 
+                              (:? (:: (lit/sym ";")
+                                      (lit/sym "SEPARATOR")
+                                      (lit/sym "=")
+                                      String)))))))
 
-;; StrReplaceExpression
+(define NotExistsFunc
+  (vac
+   (:: (lit/sym "NOT") (lit/sym "EXISTS") GroupGraphPattern)))
 
-;; SubstringExpression
+(define ExistsFunc
+  (vac
+   (:: (lit/sym "EXISTS") GroupGraphPattern)))
 
-;; RegexExpression
+(define StrReplaceExpression
+  (vac
+   (bracketted-function 
+    "REPLACE"
+    (:: Expression
+        (drop-consumed (lit/sp ",")) Expression
+        (drop-consumed (lit/sp ",")) Expression
+        (:? (:: (drop-consumed (lit/sp ",")) Expression))))))
 
-;; BuiltInCall
+(define SubstringExpression
+  (vac
+   (bracketted-function 
+    "SUBSTR"
+    (:: Expression
+        (drop-consumed (lit/sp ",")) Expression
+        (:? (:: (drop-consumed (lit/sp ",")) Expression))))))
 
-;; BrackettedExpression
+(define RegexExpression
+  (vac
+   (bracketted-function 
+    "REGEX"
+    (:: Expression
+        (drop-consumed (lit/sp ",")) Expression
+        (:? (:: (drop-consumed (lit/sp ",")) Expression))))))
 
-;; PrimaryExpression
+(define BuiltInCall
+  (vac
+   (alternatives
+    Aggregate
+    (bracketted-function "STR" Expression)
+    (bracketted-function "LANG" Expression)
+    (bracketted-function "LANGMATCHES" (:: Expression (drop-consumed (lit/sp ",")) Expression))
+    (bracketted-function "DATATYPE" Expression)
+    (bracketted-function "BOUND" Expression)
+    (bracketted-function "IRI" Expression)
+    (bracketted-function "URI" Expression)
+    (bracketted-function "BNODE" Expression)
+    (:: (lit/sp "RAND") NIL)
+   (bracketted-function "ABS" Expression)
+   (bracketted-function "CEIL" Expression)
+   (bracketted-function "FLOOR" Expression)
+   (bracketted-function "ROUND" Expression)
+   (bracketted-function "CONCAT" Expression)
+   SubstringExpression
+   (bracketted-function "STRLEN" Expression)
+   StrReplaceExpression
+   (bracketted-function "UCASE" Expression)
+   (bracketted-function "LCASE" Expression)
+   (bracketted-function "ENCODE_FOR_URI" Expression)
+   (bracketted-function "CONTAINS" (:: Expression (drop-consumed (lit/sp ",")) Expression))
+   (bracketted-function "STRSTARTS" (:: Expression (drop-consumed (lit/sp ",")) Expression))
+   (bracketted-function "STRENDS" (:: Expression (drop-consumed (lit/sp ",")) Expression))
+   (bracketted-function "STRBEFORE" (:: Expression (drop-consumed (lit/sp ",")) Expression))
+   (bracketted-function "STRAFTER" (:: Expression (drop-consumed (lit/sp ",")) Expression))
+   (bracketted-function "YEAR" Expression)
+   (bracketted-function "MONTH" Expression)
+   (bracketted-function "DAY" Expression)
+   (bracketted-function "HOURS" Expression)
+   (bracketted-function "MINUTES" Expression)
+   (bracketted-function "SECONDS" Expression)
+   (bracketted-function "TIMEZONE" Expression)
+   (bracketted-function "TZ" Expression)
+   (:: (lit/sym "NOW") NIL)
+   (:: (lit/sym "UUID") NIL)
+   (:: (lit/sym "STRUUID") NIL)
+   (bracketted-function "MD5" Expression)
+   (bracketted-function "SHA1" Expression)
+   (bracketted-function "SHA256" Expression)
+   (bracketted-function "SHA384" Expression)
+   (bracketted-function "SHA512" Expression)
+   (:: (lit/sym "COALESCE") ExpressionList)
+   (bracketted-function "IF" (:: Expression (drop-consumed (lit/sp ",")) Expression
+                                 (drop-consumed (lit/sp ",")) Expression))
+   (bracketted-function "STRLANG" (:: Expression (drop-consumed (lit/sp ",")) Expression))
+   (bracketted-function "STRDT" (:: Expression (drop-consumed (lit/sp ",")) Expression))
+   (bracketted-function "sameTerm" (:: Expression (drop-consumed (lit/sp ",")) Expression))
+   (bracketted-function "isIRI" Expression)
+   (bracketted-function "isURI" Expression)
+   (bracketted-function "isBLANK" Expression)
+   (bracketted-function "isLITERAL" Expression)
+   (bracketted-function "isNUMERIC" Expression)
+   RegexExpression
+   ExistsFunc
+   NotExistsFunc)))
 
-;; UnaryExpression
+(define BrackettedExpression
+  (vac
+   ;;(->list ;; '|@()| ;; ??
+    (::
+     (drop-consumed (lit/sp "("))
+     Expression
+     (drop-consumed (lit/sp ")")))))
 
-;; MutiplicativeExpression
+(define PrimaryExpression
+  (vac
+  (alternatives
+   (->alist '|@()| BrackettedExpression)
+   BuiltInCall iriOrFunction RDFLiteral
+   NumericLiteral BooleanLiteral Var)))
 
-;; AdditiveExpression
-					;
-;; RelationalExpression
+;; To Polish Notation!!
+(define UnaryExpression
+  (alternatives
+   (:: (lit/sym "!") PrimaryExpression)
+   (:: (lit/sym "+") PrimaryExpression)
+   (:: (lit/sym "-") PrimaryExpression)
+   PrimaryExpression))
 
-;; ValueLogical
+;; To Polish Notation!!
+(define MultiplicativeExpression
+  (::
+   UnaryExpression
+   (:*
+    (alternatives
+     (:: (lit/sym "*")
+         UnaryExpression)
+     (:: (lit/sym "/")
+         UnaryExpression)))))
 
-;; ConditionalAndExpression
+;; To Polish Notation!!
+(define AdditiveExpression
+  (:: MultiplicativeExpression
+      (:*
+       (alternatives
+        (:: (lit/sym "+") MultiplicativeExpression)
+        (:: (lit/sym "-") MultiplicativeExpression)
+        (:: 
+         (alternatives  NumericLiteralPositive NumericLiteralNegative)
+         (:*
+          (alternatives
+           (:: (lit/sym "*") UnaryExpression)
+           (:: (lit/sym "/") UnaryExpression))))))))
+				
+(define NumericExpression AdditiveExpression)
 
-;; ConditionalOrExpression
+;; To Polish Notation!!
+(define RelationalExpression 
+  (vac
+   (:: NumericExpression
+       (:? 
+        (alternatives
+         (:: (lit/sym "=") NumericExpression)
+         (:: (lit/sym "!=") NumericExpression)
+         (:: (lit/sym "<") NumericExpression)
+         (:: (lit/sym ">") NumericExpression)
+         (:: (lit/sym ">=") NumericExpression)
+         (:: (lit/sym "IN") ExpressionList)
+         (:: (lit/sym "NOT") (lit/sym "IN") ExpressionList))))))
 
-(define Expression (lit/sp "?b")) ;; **
+(define ValueLogical RelationalExpression)
 
+(define ConditionalAndExpression
+  (:: ValueLogical (:* (:: (lit/sym "&&") ValueLogical))))
+
+(define ConditionalOrExpression
+  (:: ConditionalAndExpression
+      (:* (:: (lit/sym "||") ConditionalAndExpression)))) ;; => Polish notation?
+
+(define Expression ConditionalOrExpression)
+  
 (define GraphTerm
    (alternatives
     iri RDFLiteral NumericLiteral BooleanLiteral BlankNode NIL))
@@ -497,15 +692,34 @@
 
 ;; ConstructTemplate
 
-;; ExpressionList
+(define ExpressionList
+  (alternatives
+   NIL
+   (->list
+    (:: (drop-consumed (lit/sp "("))
+        Expression
+        (:* (::
+             (drop-consumed (lit/sp "("))
+             Expression))
+        (drop-consumed (lit/sp ")"))))))
 
-;; ArgList
+(define ArgList
+  (alternatives
+   NIL
+   (->list
+    (:: (drop-consumed (lit/sp "("))
+        (:? (lit/sym "DISTINCT"))
+        Expression
+        (:* (::
+             (drop-consumed (lit/sp "("))
+             Expression))
+        (drop-consumed (lit/sp ")"))))))
 
-;; FunctionCall
+(define FunctionCall (:: iri ArgList))
 
-;; Constraint
+(define Constraint (->list (alternatives BrackettedExpression BuiltInCall FunctionCall)))
 
-;; Filter
+(define Filter (->list (:: (lit/sym "FILTER") Constraint)))
 
 (define GroupOrUnionGraphPattern
   (vac
@@ -552,7 +766,11 @@
   (alternatives GroupOrUnionGraphPattern
                 OptionalGraphPattern
 		MinusGraphPattern
-                GraphGraphPattern))
+                GraphGraphPattern
+                ;;ServiceGraphPattern
+                Filter
+                ;;Bind InlineData
+                ))
 
 (define TriplesBlock
   (vac
@@ -749,16 +967,21 @@
   ;(->alist
    ;'@SelectClause
    (::
-    (lit/sym "SELECT")
-    (:?
-     (alternatives (lit/sym "DISTINCT") (lit/sym "REDUCED")))
+    (bind-consumed->symbol 
+     (alternatives
+      (lit/sp "SELECT DISTINCT")
+      (lit/sp "SELECT REDUCED")
+      (lit/sp "SELECT")))
+    ;; (lit/sym "SELECT")
+    ;; (:?
+    ;; (alternatives (lit/sym "DISTINCT") (lit/sym "REDUCED")))
     (alternatives
-     (->list
+;     (->list
       (:+
        (between-fws 
         (alternatives
          Var
-         (:: (lit/sp "(") Expression (lit/sym "AS") Var (lit/sp ")"))))))
+         (:: (lit/sp "(") Expression (lit/sym "AS") Var (lit/sp ")")))))
      (lit/sym "*"))))
 
 (define SubSelect
@@ -918,7 +1141,8 @@ DELETE {
    ?a mu:uuid ?b, ?c, ?d . ?c mu:uuid ?e . ?f ?g ?h
   } 
 WHERE {
-  ?s ?p ?o
+  ?s ?p ?o.
+FILTER( ?s < 10)
 }
 
 ")

@@ -193,7 +193,9 @@
     (case (car x)
       ((@Unit) (string-join (map write-sparql (cdr x)) "\n"))
       ((@Prologue @Query @Update) (conc (string-join (map write-sparql (cdr x)) "\n") "\n"))
-      ((@Dataset) (string-join (map write-sparql (cdr x)) "\n"))
+      ((@Dataset @USING) (string-join (map write-sparql (cdr x)) "\n"))
+      ((FILTER) (format #f "~A (~A)"
+                        (car x) (write-sparql (cdr x) level)))
       ((|@()|) (format #f "( ~A )" (string-join (map
 						 (cut write-sparql-triple <> (+ level 1))
 						 (cdr x)) " ")))
@@ -260,6 +262,7 @@
      (list (cons (car triple) (map expand-triples (cdr triple)))))
     ((GRAPH) (list (append (take triple 2)
                            (expand-triples (cddr triple)))))
+    ((FILTER) (list triple))
     (else #f)))
 
 (define (expand-triples triples)
