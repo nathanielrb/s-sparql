@@ -14,7 +14,6 @@
 (define *default-graph*
   (make-parameter #f))
 
-;; what about Docker?
 (define *sparql-endpoint*
   (make-parameter
    "http://127.0.0.1:8890/sparql"))
@@ -37,7 +36,6 @@
            (hash-table-set! cache key body)
            (hash-table-ref cache key))))))
     
-;; to do : use this parameter in reify!
 (define *expand-namespaces?* (make-parameter #t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -65,34 +63,6 @@
 
 (define (cons-when x p)
   (if x (cons x p) p))
-
-(define (alist-ref-when x l)
-  (or (alist-ref x l) '()))
-
-(define (alist-merge-element x l)
-    (let ((current (alist-ref-when (car x) l)))
-      (if (null? current)
-          (cons x l)
-          (alist-update
-           (car x)
-           (cons (cdr x)
-                 (if (pair? current)
-                     current
-                     (list current)))
-           l))))
-
-(define (fold-alist alst)
-  (fold alist-merge-element '() alst))
-
-(define-syntax if-pair?
-  (syntax-rules ()
-    ((if-pair? pair body)
-     (if (null? pair)
-         '()
-         body))))
-
-(define (str->num x)
-  (and x (string->number x)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; data types
@@ -174,9 +144,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RDF
 
-(define (range n)
-  (list-tabulate n values))
-
 (define (write-sparql x #!optional (level 0))
   (cond ((string? x) (conc "\"" x "\""))
         ((keyword? x) (keyword->string x))
@@ -188,31 +155,64 @@
 					 x)
 				    " ")))))
 
+(define functions '(COUNT SUM MIN MAX AVG SAMPLE STR LANG LANGMATCHES 
+                          DATATYPE BOUND IRI URI BNODE RAND NIL ABS CEIL FLOOR ROUND IF
+                          CONCAT STRLEN UCASE LCASE ENCODE_FOR_URI CONTAINS STRSTARTS
+                          STRENDS STRBEFORE STRAFTER YEAR MONTH DAY HOURS MINUTES SECONDS 
+                          TIMEZONE TZ NOW NIL UUID NIL STRUUID NIL MD5 SHA1 SHA256 SHA384
+                          SHA512 COALESCE  STRLANG STRDT isIRI isURI isBLANK isLITERAL isNUMERIC
+                          REGEX SUBSTR REPLACE EXISTS))
+
+;;  GROUP_CONCAT 
+;; 'GROUP_CONCAT' '(' 'DISTINCT'? Expression ( ';' 'SEPARATOR' '=' String )? ')'
+
+(define (write-sparql-function x)
+  (and (member (car x) functions)
+       (begin (print "function " x)
+       (format #f "~A(~A)"
+               (car x)
+               (string-join 
+                (map write-sparql (cdr x))
+                ", ")))) )
+               
+
 (define (write-sparql-special x #!optional (level 0))
   (let ((pre (apply conc (make-list level " "))))
-    (case (car x)
-      ((@Unit) (string-join (map write-sparql (cdr x)) "\n"))
-      ((@Prologue @Query @Update) (conc (string-join (map write-sparql (cdr x)) "\n") "\n"))
-      ((@Dataset @USING) (string-join (map write-sparql (cdr x)) "\n"))
-      ((FILTER) (format #f "~A (~A)"
-                        (car x) (write-sparql (cdr x) level)))
-      ((|@()|) (format #f "( ~A )" (string-join (map
-						 (cut write-sparql-triple <> (+ level 1))
-						 (cdr x)) " ")))
-      ((|@[]|) (format #f "[ ~A ]" (string-join (map write-sparql-triple (cdr x)) " ")))
-      ((UNION)     
-       (conc pre
-	     (string-join  (map (cut write-sparql-triple <> (+ level 1)) (cdr x))
-			   (format #f "~%~AUNION " pre))))
-      ((GRAPH) (format #f "~AGRAPH ~A ~A  "
-		       pre (write-sparql (cadr x))
-		       (write-sparql-triple (cddr x) (+ level 1))))
-      ((WHERE MINUS OPTIONAL DELETE INSERT
-	      |DELETE WHERE| |DELETE DATA| |INSERT DATA|)
-       (format #f "~A~A ~A" pre (car x) (write-sparql-triple (cdr x) (+ level 1))))
-      (else #f))))
+    (or (write-sparql-function x)
+        (case (car x)
+          ((@Unit) (string-join (map write-sparql (cdr x)) "\n"))
+          ((@Prologue @Query @Update) (conc (string-join (map write-sparql (cdr x)) "\n") "\n"))
+          ((@Dataset @USING) (string-join (map write-sparql (cdr x)) "\n"))
 
-;; add optional indent-level for readability
+          ;; ?? how to differentiate between triple collections and functions etc.?
+          ((|@()|) (format #f "(~A)"
+                           (string-join 
+                            (map (cut write-sparql <> (+ level 1)) (cdr x)) 
+                            " ")))
+
+          ((|@[]|) (format #f "[ ~A ]"
+                           (string-join
+                            (map write-sparql-triple (cdr x)) 
+                            " ")))
+          ((UNION)     
+           (conc pre
+                 (string-join  (map (cut write-sparql-triple <> (+ level 1)) (cdr x))
+                               (format #f "~%~AUNION " pre))))
+          ((GRAPH) (format #f "~AGRAPH ~A ~A  "
+                           pre (write-sparql (cadr x))
+                           (write-sparql-triple (cddr x) (+ level 1))))
+          ((WHERE MINUS OPTIONAL DELETE INSERT
+                  |DELETE WHERE| |DELETE DATA| |INSERT DATA|)
+           (format #f "~A~A ~A" pre (car x) (write-sparql-triple (cdr x) (+ level 1))))
+          ((BIND FILTER) (format #f "~A~A ~A"
+                          pre (car x) (string-join (map write-sparql (cdr x)) " ")))
+          ((AS) (format #f "(~A AS ~A)"
+                        (write-sparql (cadr x))
+                        (write-sparql (caddr x))))
+          ((VALUES) (format #f "~AVALUES ~A { ~A }"
+                            pre (write-sparql (cadr x)) (write-sparql (caddr x))))
+          (else #f)))))
+  
 (define (write-sparql-triple triple #!optional (level 0))
   (or (write-sparql-special triple level)
       (let ((pre (apply conc (make-list level " "))))

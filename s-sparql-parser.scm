@@ -5,7 +5,7 @@
 ;; https://code.call-cc.org/svn/chicken-eggs/release/4/json-abnf/trunk/json-abnf.scm
 
 (module s-sparql-parser *
-  (import chicken scheme extras data-structures srfi-1) 
+   (import chicken scheme extras data-structures srfi-1) 
 
 (use srfi-1 srfi-13 matchable irregex)
 
@@ -45,24 +45,10 @@
 (define consumed-values->list
   (consumed-objects-lift consumed-values))
 
-;; shortcut for (abnf:bind (consumed-values->list ...) ... )
-
-(define-syntax bind-consumed-values->list
-  (syntax-rules () 
-    ((_ l p)    (bind (consumed-values->list l)  p))
-    ((_ p)      (bind (consumed-values->list)  p))
-    ))
-
 (define-syntax ->list
   (syntax-rules () 
     ((_ l p)    (bind (consumed-values->list l)  p))
     ((_ p)      (bind (consumed-values->list)  p))
-    ))
-
-(define-syntax bind-consumed-values->alist
-  (syntax-rules () 
-    ((_ label l p)    (bind (consumed-values->list label l)  p))
-    ((_ label p)      (bind (consumed-values->list label)  p))
     ))
 
 (define-syntax ->alist
@@ -80,6 +66,25 @@
     ((_ p)    (bind consumed-chars->number p))
     ))
 
+(define (rel->polish lst)
+  (print "polish? " lst)
+  (and (pair? lst)
+       (if (= (length lst) 3)
+           (list (cadr lst)
+                 (car lst)
+                 (caddr lst))
+           lst)))
+
+(define consumed-values (consumed-objects pair?))
+
+(define consumed-pairs->polish
+  (consumed-pairs->list rel->polish))
+
+(define-syntax ->polish
+  (syntax-rules () 
+    ((_ p)    (bind consumed-pairs->polish p))
+    ))
+
 (define fws
   (concatenation
    (optional-sequence 
@@ -89,7 +94,6 @@
       (alternatives char-list/crlf char-list/lf char-list/cr))))
    (optional-sequence
     (repetition char-list/wsp))))
-;;   (repetition char-list/wsp)))
 
 (define (between-fws p)
   (concatenation
@@ -167,7 +171,11 @@
 ;; WS
 
 (define NIL
-  (:: (lit/sp "(") (lit/sp ")")))
+  (->alist
+   `|@()|
+   (:: 
+    (drop-consumed (lit/sp "("))
+    (drop-consumed (lit/sp ")")))))
 
 (define ECHAR
   (:: (char-list/lit "\\")
@@ -340,8 +348,8 @@
 (define Aggregate
   (vac
    (alternatives
-    (aggregate-expression "COUNT" (alternatives (lit/sym "*") 
-                                                Expression))
+    (aggregate-expression
+     "COUNT" (alternatives (lit/sym "*")  Expression))
     (aggregate-expression "SUM" Expression)
     (aggregate-expression "MIN" Expression)
     (aggregate-expression "MAX" Expression)
@@ -449,16 +457,17 @@
 
 (define BrackettedExpression
   (vac
-   ;;(->list ;; '|@()| ;; ??
+   (->alist
+    '|@()|
     (::
      (drop-consumed (lit/sp "("))
      Expression
-     (drop-consumed (lit/sp ")")))))
+     (drop-consumed (lit/sp ")"))))))
 
 (define PrimaryExpression
   (vac
   (alternatives
-   (->alist '|@()| BrackettedExpression)
+   BrackettedExpression
    BuiltInCall iriOrFunction RDFLiteral
    NumericLiteral BooleanLiteral Var)))
 
@@ -497,19 +506,20 @@
 				
 (define NumericExpression AdditiveExpression)
 
-;; To Polish Notation!!
 (define RelationalExpression 
   (vac
-   (:: NumericExpression
-       (:? 
-        (alternatives
-         (:: (lit/sym "=") NumericExpression)
-         (:: (lit/sym "!=") NumericExpression)
-         (:: (lit/sym "<") NumericExpression)
-         (:: (lit/sym ">") NumericExpression)
-         (:: (lit/sym ">=") NumericExpression)
-         (:: (lit/sym "IN") ExpressionList)
-         (:: (lit/sym "NOT") (lit/sym "IN") ExpressionList))))))
+   (->polish
+    (:: NumericExpression
+        (:? 
+         (alternatives
+          (:: (lit/sym "=") NumericExpression)
+          (:: (lit/sym "!=") NumericExpression)
+          (:: (lit/sym "<") NumericExpression)
+          (:: (lit/sym ">") NumericExpression)
+          (:: (lit/sym ">=") NumericExpression)
+          (:: (lit/sym "<=") NumericExpression)
+          (:: (lit/sym "IN") ExpressionList)
+          (:: (lit/sym "NOT") (lit/sym "IN") ExpressionList)))))))
 
 (define ValueLogical RelationalExpression)
 
@@ -550,15 +560,20 @@
 
 (define CollectionPath
   (vac
-    (:: (lit/sp "(")
-	(:+ GraphNodePath)
-	(lit/sp ")"))))
+   (->alist
+    '|@()|
+    (:: 
+     (drop-consumed (lit/sp "("))
+     (:+ GraphNodePath)
+     (drop-consumed (lit/sp ")"))))))
 
 (define Collection
   (vac
+   (->alist
+    '|@()|
     (:: (lit/sp "(")
 	(:+ GraphNode)
-	(lit/sp ")"))))
+	(lit/sp ")")))))
 
 (define BlankNodePropertyListPath
   (vac
@@ -592,11 +607,15 @@
   (vac
     (alternatives
      iri
-     (bind-consumed->symbol 
-      (char-list/lit "a"))
-     ;;(lit/sym "a")
+     ;;(bind-consumed->symbol (char-list/lit "a"))
+     (lit/sym "a")
      ;; (:: (char-list/lit "!") PathNegatedPropertySet) ;; ** !!
-     (:: (lit/sp "(") Path (lit/sp ")")))))
+     (->alist
+      '|@()| 
+      (::
+       (drop-consumed (lit/sp "("))
+       Path
+       (drop-consumed (lit/sp ")")))))))
 
 (define PathMod
   (set-from-string "?*+"))
@@ -695,29 +714,41 @@
 (define ExpressionList
   (alternatives
    NIL
-   (->list
+   (->alist
+    '|@()|
     (:: (drop-consumed (lit/sp "("))
         Expression
-        (:* (::
-             (drop-consumed (lit/sp "("))
-             Expression))
+        (:*
+         (->alist
+          '|@()|
+          (::
+           (drop-consumed (lit/sp "("))
+           Expression
+           (drop-consumed (lit/sp ")")))))
         (drop-consumed (lit/sp ")"))))))
 
 (define ArgList
   (alternatives
    NIL
-   (->list
+   (->alist
+    '|@()|
     (:: (drop-consumed (lit/sp "("))
         (:? (lit/sym "DISTINCT"))
         Expression
-        (:* (::
-             (drop-consumed (lit/sp "("))
-             Expression))
+        (:*
+         (->alist
+          '|@()|
+          (::
+           (drop-consumed (lit/sp "("))
+             Expression
+             (drop-consumed (lit/sp ")")))))
         (drop-consumed (lit/sp ")"))))))
 
-(define FunctionCall (:: iri ArgList))
+(define FunctionCall 
+  (:: iri ArgList))
 
-(define Constraint (->list (alternatives BrackettedExpression BuiltInCall FunctionCall)))
+(define Constraint
+  (alternatives BrackettedExpression BuiltInCall FunctionCall))
 
 (define Filter (->list (:: (lit/sym "FILTER") Constraint)))
 
@@ -735,17 +766,56 @@
   (vac
    (:: (lit/sym "MINUS") GroupGraphPattern)))
 
-;; DataBlockValue
+(define DataBlockValue
+  (alternatives iri RDFLiteral NumericLiteral BooleanLiteral (lit/sym "UNDEF")))
 
-;; InlineDataFull
+(define InlineDataFull
+  (::
+   (alternatives 
+    NIL 
+   (->alist
+    '|@()|
+    (::      
+     (drop-consumed (lit/sp "("))
+     (:* (between-fws Var))
+     (drop-consumed (lit/sp ")")))))
+   (::
+    (drop-consumed (lit/sp "{"))
+    (:*
+     (alternatives
+      (->alist
+       '|@()|
+       (::
+        (drop-consumed (lit/sp "("))
+        (:* (between-fws DataBlockValue))
+        (drop-consumed (lit/sp ")"))))
+      NIL))
+     (drop-consumed (lit/sp "}")))))
 
-;; InlineDataOneVar
+(define InlineDataOneVar
+  (::
+   Var
+   (drop-consumed (lit/sp "{"))
+   (:* DataBlockValue)
+   (drop-consumed (lit/sp "}"))))
 
-;; DataBlock
+(define DataBlock
+  (alternatives InlineDataOneVar InlineDataFull))
 
 ;; InlineData
 
-;; Bind
+(define Bind
+  (->list
+   (:: 
+    (lit/sym "BIND")
+    (->alist
+     'AS
+     (:: 
+      (drop-consumed (lit/sp "("))
+      Expression
+      (drop-consumed (lit/sym "AS"))
+      Var
+      (drop-consumed (lit/sp ")")))))))
 
 ;; ServiceGraphPattern
 
@@ -769,7 +839,7 @@
                 GraphGraphPattern
                 ;;ServiceGraphPattern
                 Filter
-                ;;Bind InlineData
+                Bind ;; InlineData
                 ))
 
 (define TriplesBlock
@@ -917,25 +987,64 @@
        (->alist '@Update
                 (:? (:: Update1 (:? (:: (char-list/lit ";") Update))))))))
 
-;; ValuesClause
+(define ValuesClause
+  (:?
+   (->list
+    (::
+     (lit/sym "VALUES")
+     DataBlock))))
 
-;; OffsetClause
+(define OffsetClause
+  (->list
+   (::
+    (lit/sym "OFFSET")
+    (between-fws INTEGER))))
 
-;; LimitClause
+(define LimitClause
+  (->list
+   (::
+    (lit/sym "LIMIT")
+    (between-fws INTEGER))))
 
-;; LimitOffsetClauses
+(define LimitOffsetClauses
+  (alternatives
+   (::
+    LimitClause
+    (:? OffsetClause))
+   (::
+    OffsetClause
+    (:? LimitClause))))
 
-;; OrderCondition
+(define OrderCondition
+  (alternatives
+   (::
+    (alternatives
+     (lit/sym "ASC")
+     (lit/sym "DESC"))
+    BrackettedExpression)
+   (alternatives Constraint Var)))
 
-;; OrderClause
-
+(define OrderClause
+  (->list
+   (::
+    (bind-consumed->symbol 
+     (::
+      (lit/sp "ORDER ")
+      (lit/sp "BY")))
+    (:+ OrderCondition))))
+    
 ;; HavingClause
 
 ;; GroupCondition
 
 ;; GroupClause
 
-;; SolutionModifier
+(define SolutionModifier
+  (::
+   ;; (:? GroupClause)
+   ;; (:? HavingClause)
+   (:? OrderClause)
+   (:? LimitOffsetClauses)))
 
 (define WhereClause
   (::
@@ -981,7 +1090,14 @@
        (between-fws 
         (alternatives
          Var
-         (:: (lit/sp "(") Expression (lit/sym "AS") Var (lit/sp ")")))))
+         (->alist
+          'AS
+          (:: 
+           (drop-consumed (lit/sp "("))
+           Expression
+           (drop-consumed (lit/sym "AS"))
+           Var
+           (drop-consumed (lit/sp ")")))))))
      (lit/sym "*"))))
 
 (define SubSelect
@@ -992,8 +1108,8 @@
 (define SelectQuery
   (:: (->list SelectClause) ;; '@SelectClause 
       (->alist '@Dataset (:* DatasetClause)) ;;'@DatasetClause
-      (->list WhereClause) ;;'@WhereClause 
-      ;; SolutionModifier
+      (->list WhereClause) 
+      SolutionModifier
       ))
 
 (define PrefixDecl
@@ -1023,7 +1139,7 @@
               SelectQuery
               ;; ConstructQuery DescribeQuery AskQuery )
               ))
-    ;; (->alist '@Values ValuesClause)
+    ValuesClause
     ))
 
 (define QueryUnit
@@ -1107,10 +1223,12 @@ FROM NAMED <http://www.google.com/>
   } 
 "))
 
-(define t (parse-query ;; (car (lex QueryUnit err "
+(define t
+  (parse-query
 "PREFIX dc: <http://schema.org/dc/> 
 PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-SELECT ?a ?b
+
+SELECT ?a ?b (COUNT(?a) AS ?count)
 FROM <http://www.google.com/>
 FROM NAMED <http://www.google.com/app>  
   WHERE {
@@ -1118,7 +1236,12 @@ FROM NAMED <http://www.google.com/app>
    UNION   { ?s mu:uuid ?o, ?p, ?q }  
     UNION { ?a dc:title ?title }
     UNION { GRAPH ?g { ?l mu:function ?u } }
+  FILTER( ?x < 20 )
+  BIND( mu:category AS ?g)
   } 
+ORDER BY (LCASE(?label))
+LIMIT 10
+OFFSET 30
 
 "))
 
@@ -1150,4 +1273,4 @@ FILTER( ?s < 10)
 (define v (parse-query vs))
 (use s-sparql)
 
-)
+ )
