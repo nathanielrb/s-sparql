@@ -67,7 +67,6 @@
     ))
 
 (define (rel->polish lst)
-  (print "polish? " lst)
   (and (pair? lst)
        (if (= (length lst) 3)
            (list (cadr lst)
