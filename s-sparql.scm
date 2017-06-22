@@ -180,9 +180,10 @@
   (let ((pre (apply conc (make-list level " "))))
     (or (write-sparql-function x)
         (case (car x)
-          ((@Unit) (string-join (map write-sparql (cdr x)) "\n"))
-          ((@Prologue @Query @Update) (conc (string-join (map write-sparql (cdr x)) "\n") "\n"))
-          ((@Dataset @USING) (string-join (map write-sparql (cdr x)) "\n"))
+          ((@Unit) (string-join (map write-sparql (cdr x)) ";\n"))
+          ((@Prologue @Query) (conc (string-join (map write-sparql (cdr x)) "\n") "\n"))
+          ((@Update) (conc (string-join (map write-sparql (cdr x)) "\n") "\n"))
+          ((@Dataset @Using) (string-join (map write-sparql (cdr x)) "\n"))
 
           ;; ?? how to differentiate between triple collections and functions etc.?
           ((|@()|) (format #f "(~A)"
@@ -384,7 +385,7 @@
 (define (sparql/update query)
   (let ((endpoint (*sparql-endpoint*)))
     (when (*print-queries?*)
-      (format #t "~%~%Query:~%~%~A" (add-prefixes query)))
+      (format #t "~%~%==Executing Query==~%~%~A" (add-prefixes query)))
     (let-values (((result uri response)
 		  (with-input-from-request 
 		   (make-request method: 'POST
@@ -402,7 +403,7 @@
 (define (sparql/select query #!optional raw?)
   (let ((endpoint (*sparql-endpoint*)))
     (when (*print-queries?*)
-	  (format #t "~%Query:~%~A~%" (add-prefixes query)))
+	  (format #t "~%==Executing Query==~%~A~%" (add-prefixes query)))
     (let-values (((result uri response)
 		  (with-input-from-request 
 		   (make-request method: 'POST

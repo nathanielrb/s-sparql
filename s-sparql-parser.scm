@@ -184,6 +184,7 @@
 ;; ??? for stringliterals
 (define STRINGCHAR
   (alternatives
+   (set-from-string " -_.")
    char-list/decimal
    char-list/alpha)) ;; **
 
@@ -341,9 +342,12 @@
 
 (define (aggregate-expression label content)
   (vac
-   (bracketted-function label
-                        (:: (:? (lit/sym "DISTINCT")) 
-                            content))))
+   (bracketted-function 
+    label
+    (->list
+     (::
+      (:? (lit/sym "DISTINCT")) 
+      content)))))
 
 (define Aggregate
   (vac
@@ -550,13 +554,15 @@
 
 (define GraphNodePath
   (vac
-   (alternatives
-    VarOrTerm TriplesNodePath)))
+   (between-fws 
+    (alternatives
+     VarOrTerm TriplesNodePath))))
 
 (define GraphNode
   (vac
-   (alternatives
-    VarOrTerm TriplesNode)))
+   (between-fws 
+    (alternatives
+     VarOrTerm TriplesNode))))
 
 (define CollectionPath
   (vac
@@ -889,9 +895,11 @@
         (:? TriplesTemplate)))))
 
 (define QuadData
-  (:: (drop-consumed (lit/sp "{"))
-      Quads
-      (drop-consumed (lit/sp "}"))))
+  (->list
+   (:: 
+    (drop-consumed (lit/sp "{"))
+    Quads
+    (drop-consumed (lit/sp "}")))))
 
 
 ;; QuadPattern
@@ -916,22 +924,26 @@
    QuadData))
 
 (define DeleteClause
-  (:: 
-   (lit/sym "DELETE")
-   QuadData))
+  (->list
+   (:: 
+    (lit/sym "DELETE")
+    QuadData)))
 
 (define Modify
-  (:: (:? (->alist '@Dataset (:: (lit/sym "WITH") iri)))
-      (->list
-       (alternatives 
-        (:: DeleteClause
-            (:? InsertClause))
-        InsertClause))
-      (->alist '@Using (:* UsingClause))
-      (->list
-       (::
-        (lit/sym "WHERE")
-        GroupGraphPattern))))
+  (:: 
+   (:?
+    (->alist
+     '@Dataset
+     (:: (lit/sym "WITH") iri)))
+   (alternatives 
+    (:: DeleteClause
+        (:? InsertClause))
+    InsertClause)
+   (->alist '@Using (:* UsingClause))
+   (->list
+    (::
+     (lit/sym "WHERE")
+     GroupGraphPattern))))
 
 (define DeleteWhere
   (->list
@@ -983,9 +995,15 @@
 
 (define Update
   (vac
-   (:: (->alist '@Prologue Prologue)
-       (->alist '@Update
-                (:? (:: Update1 (:? (:: (char-list/lit ";") Update))))))))
+   (::
+    (->list
+     (:: 
+      (->alist '@Prologue Prologue)
+      (:? (->alist '@Update Update1))))
+    (:? 
+     (:: 
+      (drop-consumed (char-list/lit ";"))
+      Update)))))
 
 (define ValuesClause
   (:?
@@ -1132,6 +1150,7 @@
 (->alist '@Unit  Update))
 
 (define Query
+  (->list
    (concatenation
     (->alist '@Prologue Prologue)
     (->alist '@Query
@@ -1140,7 +1159,7 @@
               ;; ConstructQuery DescribeQuery AskQuery )
               ))
     ValuesClause
-    ))
+    )))
 
 (define QueryUnit
   (->alist '@Unit Query))
@@ -1171,7 +1190,11 @@
       (assoc sym alist)))
 
 (define (unit-prologue QueryUnit)
-  (nested-alist-ref QueryUnit '@Unit '@Prologue))
+  ;;(nested-alist-ref QueryUnit '@Unit '@Prologue))
+  (join
+   (map (lambda (unit)
+          (alist-ref '@Prologue unit))
+        (alist-ref '@Unit QueryUnit))))
 
 (define (unit-query QueryUnit)
   (nested-alist-ref QueryUnit '@Unit '@Query))
@@ -1273,4 +1296,4 @@ FILTER( ?s < 10)
 (define v (parse-query vs))
 (use s-sparql)
 
- )
+)
