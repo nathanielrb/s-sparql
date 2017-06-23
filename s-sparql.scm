@@ -150,10 +150,19 @@
         ((number? x) (number->string x))
         ((symbol? x) (symbol->string x))
         ((boolean? x) (if x "true" "false"))
-        ((pair? x) (or (write-sparql-special x)
+        ((pair? x) (or (write-sparql-typed x)
+		       (write-sparql-special x)
                        (string-join (map (cut write-sparql <> (+ level 1))
 					 x)
 				    " ")))))
+
+(define (typed-literal? x)
+  (and (pair? x) (not (list? x))
+       (string? (car x)) (symbol? (cdr x))))
+
+(define (write-sparql-typed x)
+  (and (typed-literal? x) 
+       (format #f "\"~A\"^^~A" (car x) (cdr x))))
 
 (define functions '(COUNT SUM MIN MAX AVG SAMPLE STR LANG LANGMATCHES 
                           DATATYPE BOUND IRI URI BNODE RAND NIL ABS CEIL FLOOR ROUND IF
@@ -249,7 +258,8 @@
 
 (define (write-sparql-objects x)
   (if (pair? x)
-      (or (write-sparql-special x)
+      (or (write-sparql-typed x)
+	  (write-sparql-special x)
           (string-join (map (lambda (y) (write-sparql y)) x) ", "))
       (write-sparql x)))
 
@@ -277,15 +287,16 @@
 	 (let ((subject (car triple)))
 	   (join
 	    (map (lambda (po-list)
-		   (let ((predicate (car po-list)))
-		     (if (pair? (cadr po-list))
+		   (let ((predicate (car po-list))
+			 (object (cadr po-list)))
+		     (if (list? object)
 			 (map (lambda (object)
 				(list subject predicate object))
 			      (cadr po-list))
-			 (list (list subject predicate (cadr po-list))))))
+			 (list (list subject predicate object)))))
 		 predicates))))
 	((subject predicate objects)
-	 (if (pair? objects)
+	 (if (list? objects)
 	     (map (lambda (object)
 		    (list subject predicate object))
 		  objects)
