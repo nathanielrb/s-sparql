@@ -918,9 +918,10 @@
   
 
 (define InsertClause
-  (:: 
-   (lit/sym "INSERT")
-   QuadData))
+  (->list
+   (:: 
+    (lit/sym "INSERT")
+    QuadData)))
 
 (define DeleteClause
   (->list

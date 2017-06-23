@@ -64,6 +64,14 @@
 (define (cons-when x p)
   (if x (cons x p) p))
 
+(define-syntax splice-when
+  (syntax-rules ()
+    ((splice-when body)
+     (let ((body-val body))
+       (splice-when body-val body-val)))
+    ((splice-when test body)
+     (if (or (not test) (null? test)) '() body))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; data types
 
@@ -345,6 +353,11 @@
   (conc (if with-graph (format #f "WITH ~A " with-graph) "")
         (format #f "~%INSERT {~%  ~A ~%}" triples)))
 
+;; (define (s-insert triples #!key (using-graph (*default-graph*)))
+;;    `(@Update
+;;      (INSERT ,@triples)
+;;      ,@(splice-when (and using-graph `((@Using (USING ,using-graph)))))))
+
 (define (sparql-varlist vars)
   (if (pair? vars)
       (string-join (map ->string vars) ", ")
@@ -441,6 +454,23 @@
 	 ("http://www.w3.org/2001/XMLSchema#integer"
 	  (cons var (string->number value)))
 	 (_ (cons var value))))]))
+
+(define sparql-binding
+  (match-lambda
+    [(var (`type . "uri") . rest)
+     (cons var (read-uri (alist-ref 'value rest)))]
+    [(var (`type . "literal") . rest)
+     (let ((lang (alist-ref 'xml:lang rest))
+	   (value (alist-ref 'value rest)))
+       (cons var (if lang (conc value "@" lang) value)))]
+    [(var (`type . "typed-literal") . rest)
+     (let ((datatype (alist-ref 'datatype rest))
+	   (value (alist-ref 'value rest)))
+       (match datatype
+	 ("http://www.w3.org/2001/XMLSchema#integer"
+	  (cons var (cons (string->number value)
+			  (read-uri datatype))))
+	 (_ (cons var (cons value (read-uri datatype))))))]))
 
 (define (unpack-bindings results)
   (map (lambda (binding)
