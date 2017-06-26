@@ -894,11 +894,11 @@
         (:? TriplesTemplate)))))
 
 (define QuadData
-  (->list
+  ;; (->list
    (:: 
     (drop-consumed (lit/sp "{"))
     Quads
-    (drop-consumed (lit/sp "}")))))
+    (drop-consumed (lit/sp "}"))))
 
 
 ;; QuadPattern
