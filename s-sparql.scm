@@ -292,17 +292,17 @@
 (define (expand-special triple)
   (cond ((blank-node-path? (car triple))
          (let ((subject (new-blank-node)))
-           (append (expand-triple 
-                  (cons subject (cdr triple)))
-                 (expand-triple
-                  (cons subject (cdar triple))))))
+           (print "blank subj")
+            (append (expand-triple (cons subject (cdr triple)))
+                    (expand-triple (cons subject (cdar triple))))))
         ((and (= (length triple) 3)
               (blank-node-path? (caddr triple)))
          (let ((object (new-blank-node)))
+           (print "blank obj " triple)
            (match triple
-             ((s p (_ p1 o1))
-              (append (expand-triple (list s p object))
-                    (expand-triple (list object p1 o1)))))))
+             ((s p (_ . rest))
+               (append (expand-triple (list s p object))
+                       (expand-triple (cons object rest)))))))
         (else
          (case (car triple)
            ((WHERE DELETE INSERT) 
@@ -322,6 +322,11 @@
   (or (expand-special triples)
       (join (map expand-triple triples))))
 
+(define (expand-expanded-triple s p o)
+  (if (blank-node-path? o)
+      (expand-special (list s p o))
+      (list (list s p o))))
+
 (define (expand-triple triple)
   (or (expand-special triple)
       (match triple
@@ -331,18 +336,20 @@
             (map (lambda (po-list)
                    (let ((predicate (car po-list))
                          (object (cadr po-list)))
-                     (if (list? object)
-                         (map (lambda (object)
-                                (list subject predicate object))
-                              (cadr po-list))
-                         (list (list subject predicate object)))))
+                     (if (and (list? object) (not (blank-node-path? object)))
+                         (join
+                          (map (lambda (object)
+                                 (expand-expanded-triple subject predicate object))
+                               (cadr po-list)))
+                         (expand-expanded-triple subject predicate object))))
                  predicates))))
         ((subject predicate objects)
          (if (list? objects)
-             (map (lambda (object)
-                    (list subject predicate object))
-                  objects)
-             (list (list subject predicate objects)))))))
+             (join
+              (map (lambda (object)
+                     (expand-expanded-triple subject predicate object))
+                   objects))
+             (expand-expanded-triple subject predicate objects))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RDF Convenience Functions

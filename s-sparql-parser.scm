@@ -348,15 +348,16 @@
   (alternatives NumericLiteralUnsigned NumericLiteralPositive NumericLiteralNegative))
 
 (define RDFLiteral
-  (->cons
-   (:: 
-    String
-    (:? 
+  (alternatives
+   (->cons
+    (:: 
+     String
      (alternatives
       LANGTAG
       (::
        (drop-consumed (char-list/lit "^^"))
-       iri))))))
+       iri))))
+   String))
 
 (define iriOrFunction
   (vac
