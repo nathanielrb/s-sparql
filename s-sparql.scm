@@ -78,6 +78,9 @@
 (define (new-sparql-variable #!optional (prefix "v"))
   (string->symbol (conc "?" (->string (gensym prefix)))))
 
+(define (new-blank-node #!optional (prefix "b"))
+  (string->symbol (conc "_:" (->string (gensym prefix)))))
+
 (define (sparql-variable str)
   (string->symbol (conc "?" (->string str))))
 
@@ -85,6 +88,15 @@
   (and (symbol? obj)
        (or (equal? "?" (substring (->string obj) 0 1))
            (equal? "$" (substring (->string obj) 0 1)))))
+
+(define (blank-node? obj)
+  (and (symbol? obj)
+       (or (equal? "_:" (substring (->string obj) 0 2))
+           (equal? obj '|@[]|))))
+
+(define (blank-node-path? obj)
+  (and (list? obj)
+       (blank-node? (car obj))))
 
 (define (iri? obj)
   (and (symbol? obj)
@@ -278,17 +290,33 @@
       (write-sparql x)))
 
 (define (expand-special triple)
-  (case (car triple)
-    ((WHERE DELETE INSERT) 
-     (cons (car triple) (expand-triples (cdr triple))))
-    ((|@()| |@[]| MINUS OPTIONAL)
-     (list (cons (car triple) (expand-triples (cdr triple)))))
-    ((UNION)
-     (list (cons (car triple) (map expand-triples (cdr triple)))))
-    ((GRAPH) (list (append (take triple 2)
-                           (expand-triples (cddr triple)))))
-    ((FILTER) (list triple))
-    (else #f)))
+  (cond ((blank-node-path? (car triple))
+         (let ((subject (new-blank-node)))
+           (append (expand-triple 
+                  (cons subject (cdr triple)))
+                 (expand-triple
+                  (cons subject (cdar triple))))))
+        ((and (= (length triple) 3)
+              (blank-node-path? (caddr triple)))
+         (let ((object (new-blank-node)))
+           (match triple
+             ((s p (_ p1 o1))
+              (append (expand-triple (list s p object))
+                    (expand-triple (list object p1 o1)))))))
+        (else
+         (case (car triple)
+           ((WHERE DELETE INSERT) 
+            (cons (car triple) (expand-triples (cdr triple))))
+           ((|@[]|)
+            (expand-triple (cons (new-blank-node) (cdr triple))))
+           ((|@()| MINUS OPTIONAL)
+            (list (cons (car triple) (expand-triples (cdr triple)))))
+           ((UNION)
+            (list (cons (car triple) (map expand-triples (cdr triple)))))
+           ((GRAPH) (list (append (take triple 2)
+                                  (expand-triples (cddr triple)))))
+           ((FILTER) (list triple))
+           (else #f)))))
 
 (define (expand-triples triples)
   (or (expand-special triples)
@@ -297,24 +325,24 @@
 (define (expand-triple triple)
   (or (expand-special triple)
       (match triple
-	((subject predicates)
-	 (let ((subject (car triple)))
-	   (join
-	    (map (lambda (po-list)
-		   (let ((predicate (car po-list))
-			 (object (cadr po-list)))
-		     (if (list? object)
-			 (map (lambda (object)
-				(list subject predicate object))
-			      (cadr po-list))
-			 (list (list subject predicate object)))))
-		 predicates))))
-	((subject predicate objects)
-	 (if (list? objects)
-	     (map (lambda (object)
-		    (list subject predicate object))
-		  objects)
-	     (list (list subject predicate objects)))))))
+        ((subject predicates)
+         (let ((subject (car triple)))
+           (join
+            (map (lambda (po-list)
+                   (let ((predicate (car po-list))
+                         (object (cadr po-list)))
+                     (if (list? object)
+                         (map (lambda (object)
+                                (list subject predicate object))
+                              (cadr po-list))
+                         (list (list subject predicate object)))))
+                 predicates))))
+        ((subject predicate objects)
+         (if (list? objects)
+             (map (lambda (object)
+                    (list subject predicate object))
+                  objects)
+             (list (list subject predicate objects)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RDF Convenience Functions
