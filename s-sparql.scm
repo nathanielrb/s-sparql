@@ -496,23 +496,6 @@
 	  (cons var (string->number value)))
 	 (_ (cons var value))))]))
 
-(define sparql-binding
-  (match-lambda
-    [(var (`type . "uri") . rest)
-     (cons var (read-uri (alist-ref 'value rest)))]
-    [(var (`type . "literal") . rest)
-     (let ((lang (alist-ref 'xml:lang rest))
-	   (value (alist-ref 'value rest)))
-       (cons var (if lang (conc value "@" lang) value)))]
-    [(var (`type . "typed-literal") . rest)
-     (let ((datatype (alist-ref 'datatype rest))
-	   (value (alist-ref 'value rest)))
-       (match datatype
-	 ("http://www.w3.org/2001/XMLSchema#integer"
-	  (cons var (cons (string->number value)
-			  (read-uri datatype))))
-	 (_ (cons var (cons value (read-uri datatype))))))]))
-
 (define (unpack-bindings results)
   (map (lambda (binding)
 	 (map sparql-binding binding))
