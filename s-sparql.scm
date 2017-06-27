@@ -158,19 +158,25 @@
         ((number? x) (number->string x))
         ((symbol? x) (symbol->string x))
         ((boolean? x) (if x "true" "false"))
-        ((pair? x) (or (write-sparql-typed x)
+        ((pair? x) (or (write-sparql-literal x)
 		       (write-sparql-special x)
                        (string-join (map (cut write-sparql <> (+ level 1))
 					 x)
 				    " ")))))
 
-(define (typed-literal? x)
+(define (langtag? x)
+  (and (symbol? x)
+       (equal? (substring (symbol->string x) 0 1) "@")))
+
+(define (typed-or-langtag-literal? x)
   (and (pair? x) (not (list? x))
        (string? (car x)) (symbol? (cdr x))))
 
-(define (write-sparql-typed x)
-  (and (typed-literal? x) 
-       (format #f "\"~A\"^^~A" (car x) (cdr x))))
+(define (write-sparql-literal x)
+  (and (typed-or-langtag-literal? x) 
+       (if (langtag? (cdr x))
+           (format #f "\"~A\"~A" (car x) (cdr x))
+           (format #f "\"~A\"^^~A" (car x) (cdr x)))))
 
 (define functions '(COUNT SUM MIN MAX AVG SAMPLE STR LANG LANGMATCHES 
                           DATATYPE BOUND IRI URI BNODE RAND NIL ABS CEIL FLOOR ROUND IF
@@ -210,7 +216,7 @@
 
           ((|@[]|) (format #f "[ ~A ]"
                            (string-join
-                            (map write-sparql-triple (cdr x)) 
+                            (map write-sparql-properties (cdr x)) 
                             " ")))
           ((UNION)     
            (conc pre
@@ -266,7 +272,7 @@
 
 (define (write-sparql-objects x)
   (if (pair? x)
-      (or (write-sparql-typed x)
+      (or (write-sparql-literal x)
 	  (write-sparql-special x)
           (string-join (map (lambda (y) (write-sparql y)) x) ", "))
       (write-sparql x)))

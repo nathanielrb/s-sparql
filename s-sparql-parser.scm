@@ -5,7 +5,7 @@
 ;; https://code.call-cc.org/svn/chicken-eggs/release/4/json-abnf/trunk/json-abnf.scm
 
 (module s-sparql-parser *
-   (import chicken scheme extras data-structures srfi-1) 
+  (import chicken scheme extras data-structures srfi-1) 
 
 (use srfi-1 srfi-13 matchable irregex)
 
@@ -37,7 +37,6 @@
 (define consumed-values (consumed-objects value?))
 
 ;; helper macro for mutually-recursive parser definitions
-
 (define-syntax vac
   (syntax-rules ()
     ((_ fn) (lambda args (apply fn args)))))
@@ -57,6 +56,18 @@
     ((_ label p)      (bind (consumed-values->list label)  p))
     ))
 
+(define (2list->cons vals)
+  (print "Vals " vals)
+  (and (list? vals)
+         (= (length vals) 2)
+         (print (cons (car vals) (cadr vals)))
+         (cons (car vals) (cadr vals))))
+
+(define-syntax ->cons
+  (syntax-rules () 
+    ((_ p)    (bind (consumed-values->list 2list->cons) p))
+    ))
+
 (define consumed-chars->number
   (consumed-chars->list 
    (compose string->number list->string)))
@@ -74,7 +85,7 @@
                  (caddr lst))
            lst)))
 
-(define consumed-values (consumed-objects pair?))
+;; (define consumed-values (consumed-objects pair?))
 
 (define consumed-pairs->polish
   (consumed-pairs->list rel->polish))
@@ -236,7 +247,15 @@
 
 (define INTEGER (->number (:+ char-list/decimal)))
 
-;; LANGTAG
+(define LANGTAG 
+  (bind-consumed->symbol
+   (::    
+     (char-list/lit "@")
+     (:+ char-list/alpha)
+     (:*
+      (:: 
+       (char-list/lit "-")
+       (:+ char-list/alpha))))))
 
 ;; VAR2
 
@@ -246,14 +265,16 @@
   (vac
    (::
    (char-list/lit "_:")
-   (alternatives PN_CHARS_U
-		 char-list/decimal
-		 char-list/alpha) ;; **
+   (alternatives
+    PN_CHARS_U
+    char-list/decimal
+    char-list/alpha) ;; **
    (:?
     (::
-     (:* (alternatives
-	  PN_CHARS
-	  (char-list/lit ".")))
+     (:*
+      (alternatives
+       PN_CHARS
+       (char-list/lit ".")))
      PN_CHARS)))))
 
 (define PNAME_LN
@@ -296,16 +317,18 @@
 (define String
   (bind-consumed->string
    (alternatives
-    (:: (drop-consumed (char-list/lit "\""))
-	(repetition
-	 (alternatives
-	  STRINGCHAR ECHAR))
-        (drop-consumed (char-list/lit "\"")))
-   (:: (drop-consumed (char-list/lit "'"))
-	(repetition
-	 (alternatives
-	  STRINGCHAR ECHAR))
-        (drop-consumed (char-list/lit "'"))))))
+    (::
+     (drop-consumed (char-list/lit "\""))
+     (repetition
+      (alternatives
+       STRINGCHAR ECHAR))
+     (drop-consumed (char-list/lit "\"")))
+    (::
+     (drop-consumed (char-list/lit "'"))
+     (repetition
+      (alternatives
+       STRINGCHAR ECHAR))
+     (drop-consumed (char-list/lit "'"))))))
 
 (define BooleanLiteral
    (alternatives
@@ -325,7 +348,15 @@
   (alternatives NumericLiteralUnsigned NumericLiteralPositive NumericLiteralNegative))
 
 (define RDFLiteral
-  (:: String)) ;; ( LANGTAG | ( '^^' iri ) )?
+  (->cons
+   (:: 
+    String
+    (:? 
+     (alternatives
+      LANGTAG
+      (::
+       (drop-consumed (char-list/lit "^^"))
+       iri))))))
 
 (define iriOrFunction
   (vac
@@ -900,7 +931,6 @@
     Quads
     (drop-consumed (lit/sp "}"))))
 
-
 ;; QuadPattern
 
 ;; GraphRefAll
@@ -1287,7 +1317,7 @@ DELETE {
    ?a mu:uuid ?b, ?c, ?d . ?c mu:uuid ?e . ?f ?g ?h
   } 
 WHERE {
-  ?s ?p ?o.
+  ?s ?p \"abc\"@en.
 FILTER( ?s < 10)
 }
 
