@@ -910,12 +910,13 @@
             (:? TriplesTemplate))))))
   
 (define QuadsNotTriples
-  (::
-   (lit/sym "GRAPH")
-   VarOrIri
-   (:: (drop-consumed (lit/sp "{"))
-       (:? TriplesTemplate)
-       (drop-consumed (lit/sp "}")))))
+  (->list
+   (::
+    (lit/sym "GRAPH")
+    VarOrIri
+    (:: (drop-consumed (lit/sp "{"))
+        (:? TriplesTemplate)
+        (drop-consumed (lit/sp "}"))))))
 
 (define Quads
   (::

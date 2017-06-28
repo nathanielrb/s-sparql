@@ -447,7 +447,7 @@
 	  (expand-namespace-prefixes (*namespaces*))
 	  query))
 
-(define (sparql/update query)
+(define (sparql/update query #!key (additional-headers '()))
   (let ((endpoint (*sparql-endpoint*)))
     (when (*print-queries?*)
       (format #t "~%~%==Executing Query==~%~%~A" (add-prefixes query)))
@@ -455,8 +455,10 @@
 		  (with-input-from-request 
 		   (make-request method: 'POST
 				 uri: (uri-reference endpoint)
-				 headers: (headers '((content-type application/sparql-update)
-                                                     (Accept application/json))))
+				 headers: (headers (append
+                                                    additional-headers
+                                                    '((content-type application/sparql-update)
+                                                      (Accept application/json)))))
 		   (add-prefixes query)
 		   read-json)))
       (close-connection! uri)
@@ -465,7 +467,7 @@
 (define (sparql/select-unique query #!optional raw?)
   (car-when (sparql/select query raw?)))
 
-(define (sparql/select query #!optional raw?)
+(define (sparql/select query #!optional raw? #!key (additional-headers '()))
   (let ((endpoint (*sparql-endpoint*)))
     (when (*print-queries?*)
 	  (format #t "~%==Executing Query==~%~A~%" (add-prefixes query)))
@@ -473,8 +475,10 @@
 		  (with-input-from-request 
 		   (make-request method: 'POST
 				 uri: (uri-reference endpoint)
-				 headers: (headers '((Content-Type application/x-www-form-urlencoded)
-						     (Accept application/json))))
+				 headers: (headers (append
+                                                    additional-headers
+                                                    '((Content-Type application/x-www-form-urlencoded)
+                                                      (Accept application/json)))))
 		   `((query . ,(add-prefixes query)))
                    read-json)))
       (close-connection! uri)
