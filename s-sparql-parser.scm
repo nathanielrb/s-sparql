@@ -286,7 +286,7 @@
    (repetition1 
     ;; should be PN_PREFIX
     (alternatives
-     char-list/numeric
+     char-list/decimal
      char-list/alpha
      (char-list/lit "-")))
    (char-list/lit ":")))
