@@ -283,7 +283,12 @@
 
 (define PNAME_NS
   (concatenation
-   (repetition1 char-list/alpha) 
+   (repetition1 
+    ;; should be PN_PREFIX
+    (alternatives
+     char-list/numeric
+     char-list/alpha
+     (char-list/lit "-")))
    (char-list/lit ":")))
 
 (define IRIREF ;; **
