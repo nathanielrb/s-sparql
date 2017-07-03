@@ -411,7 +411,7 @@
 
 (define (sparql-varlist vars)
   (if (pair? vars)
-      (string-join (map ->string vars) ", ")
+      (string-join (map ->string vars) " ")
       (->string vars)))
 
 (define (s-select vars statements
