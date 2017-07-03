@@ -250,27 +250,29 @@
           (else #f)))))
   
 (define (write-sparql-triple triple #!optional (level 0))
-  (or (write-sparql-special triple level)
-      (let ((pre (apply conc (make-list level " "))))
-	(if (pair? (car triple)) ;; list of triples
-
-	    ;; abstract the spacing
-	    ;; and think about singletons : { a b c. }
-	    (format #f "{~%~A~%~A}"
-		    (string-join (map (cut write-sparql-triple <> (+ level 1)) triple) "\n")
-		    pre)
-	    (conc
-	     pre
-	     (string-join
-	      (match triple
-		((subject properties) 
-		 (list (write-sparql subject)
-		       (write-sparql-properties properties)))
-		((subject predicate objects)
-		 (list (write-sparql subject)
-		       (write-sparql-properties predicate)
-		       (write-sparql-objects objects)))))
-	     ".")))))
+  (if (null? triple)
+      "{}"
+      (or (write-sparql-special triple level)
+          (let ((pre (apply conc (make-list level " "))))
+            (if (pair? (car triple)) ;; list of triples
+                
+                ;; abstract the spacing
+                ;; and think about singletons : { a b c. }
+                (format #f "{~%~A~%~A}"
+                        (string-join (map (cut write-sparql-triple <> (+ level 1)) triple) "\n")
+                        pre)
+                (conc
+                 pre
+                 (string-join
+                  (match triple
+                    ((subject properties) 
+                     (list (write-sparql subject)
+                           (write-sparql-properties properties)))
+                    ((subject predicate objects)
+                     (list (write-sparql subject)
+                           (write-sparql-properties predicate)
+                           (write-sparql-objects objects)))))
+                 "."))))))
 
 (define (write-sparql-properties x)
   (if (pair? x)
