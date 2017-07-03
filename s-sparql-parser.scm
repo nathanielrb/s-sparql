@@ -660,7 +660,11 @@
        (drop-consumed (lit/sp ")")))))))
 
 (define PathMod
-  (set-from-string "?*+"))
+  (bind-consumed->symbol
+   (::
+    (set-from-string "?*+")
+    (drop-consumed
+     (char-list/lit " "))))) ;; ??
 
 (define PathEltOrInverse
   (vac
@@ -697,18 +701,19 @@
 (define PropertyListPathNotEmpty
   (vac
    (->list
-   (::
-    (->list
-     (::
-      (between-fws (alternatives VerbPath VerbSimple))
-      ObjectListPath))
-    (:*
-     (:: (drop-consumed (lit/sp ";"))
-         (:?
-          (->list
-           (::
-            (between-fws (alternatives VerbPath VerbSimple))
-            ObjectList)))))))))
+    (::
+     (->list
+      (::
+       (between-fws (alternatives VerbPath VerbSimple))
+       ObjectListPath))
+     (:*
+      (:: 
+       (drop-consumed (lit/sp ";"))
+       (:?
+        (->list
+         (::
+          (between-fws (alternatives VerbPath VerbSimple))
+          ObjectList)))))))))
 
 (define PropertyListPath
   (:? PropertyListPathNotEmpty))
