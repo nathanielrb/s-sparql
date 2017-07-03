@@ -77,17 +77,17 @@
     ((_ p)    (bind consumed-chars->number p))
     ))
 
+;; really buggy
 (define (rel->polish lst)
+  (print "Polish? " lst)
   (and (pair? lst)
        (pair? (car lst))
-       (let ((lst (or (and (equal? (caar lst) '|@()|)
-                           (cdar lst))
-                      (car lst))))
-       (if (= (length lst) 3)
-           (list (cadr lst)
-                 (car lst)
-                 (caddr lst))
-           lst))))
+       (let ((lst (car lst)))  ;;(or (and (equal? (caar lst) '|@()|)
+         (if (= (length lst) 3)
+             (list (cadr lst)
+                   (car lst)
+                   (caddr lst))
+             lst))))
 
 ;; (define consumed-values (consumed-objects pair?))
 
@@ -485,8 +485,12 @@
    (bracketted-function "SHA384" Expression)
    (bracketted-function "SHA512" Expression)
    (:: (lit/sym "COALESCE") ExpressionList)
-   (bracketted-function "IF" (:: Expression (drop-consumed (lit/sp ",")) Expression
-                                 (drop-consumed (lit/sp ",")) Expression))
+   (bracketted-function "IF" (::
+                              Expression
+                              (drop-consumed (lit/sp ",")) 
+                              Expression
+                              (drop-consumed (lit/sp ",")) 
+                              Expression))
    (bracketted-function "STRLANG" (:: Expression (drop-consumed (lit/sp ",")) Expression))
    (bracketted-function "STRDT" (:: Expression (drop-consumed (lit/sp ",")) Expression))
    (bracketted-function "sameTerm" (:: Expression (drop-consumed (lit/sp ",")) Expression))
@@ -525,7 +529,7 @@
 
 ;; To Polish Notation!!
 (define MultiplicativeExpression
-  (->polish
+  ;;(->polish
    (::
     UnaryExpression
     (:*
@@ -533,11 +537,11 @@
       (:: (lit/sym "*")
           UnaryExpression)
       (:: (lit/sym "/")
-          UnaryExpression))))))
+          UnaryExpression)))))
 
 ;; To Polish Notation!!
 (define AdditiveExpression
-  (->polish
+  ;;(->polish
    (:: MultiplicativeExpression
        (:*
         (alternatives
@@ -548,24 +552,25 @@
           (:*
            (alternatives
             (:: (lit/sym "*") UnaryExpression)
-            (:: (lit/sym "/") UnaryExpression)))))))))
+            (:: (lit/sym "/") UnaryExpression))))))))
 				
 (define NumericExpression AdditiveExpression)
 
 (define RelationalExpression 
   (vac
-   (->polish
-    (:: NumericExpression
-        (:? 
-         (alternatives
-          (:: (lit/sym "=") NumericExpression)
-          (:: (lit/sym "!=") NumericExpression)
-          (:: (lit/sym "<") NumericExpression)
-          (:: (lit/sym ">") NumericExpression)
-          (:: (lit/sym ">=") NumericExpression)
-          (:: (lit/sym "<=") NumericExpression)
-          (:: (lit/sym "IN") ExpressionList)
-          (:: (lit/sym "NOT") (lit/sym "IN") ExpressionList)))))))
+   ;;(->polish
+    (:: 
+      NumericExpression
+      (:? 
+       (alternatives
+        (:: (lit/sym "=") NumericExpression)
+        (:: (lit/sym "!=") NumericExpression)
+        (:: (lit/sym "<") NumericExpression)
+        (:: (lit/sym ">") NumericExpression)
+        (:: (lit/sym ">=") NumericExpression)
+        (:: (lit/sym "<=") NumericExpression)
+        (:: (lit/sym "IN") ExpressionList)
+        (:: (lit/sym "NOT") (lit/sym "IN") ExpressionList))))))
 
 (define ValueLogical RelationalExpression)
 
@@ -576,7 +581,7 @@
   (:: ConditionalAndExpression
       (:* (:: (lit/sym "||") ConditionalAndExpression)))) ;; => Polish notation?
 
-(define Expression ConditionalOrExpression)
+(define Expression (->list ConditionalOrExpression))
   
 (define GraphTerm
    (alternatives
