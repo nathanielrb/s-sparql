@@ -325,7 +325,7 @@
             (list (cons (car triple) (map expand-triples (cdr triple)))))
            ((GRAPH) (list (append (take triple 2)
                                   (expand-triples (cddr triple)))))
-           ((FILTER) (list triple))
+           ((FILTER BIND) (list triple))
            (else #f)))))
 
 (define (expand-triples triples)
