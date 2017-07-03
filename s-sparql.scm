@@ -203,17 +203,25 @@
 
 (define (write-sparql-function x)
   (and (member (car x) functions)
-       (begin (print "function " x)
        (format #f "~A(~A)"
                (car x)
                (string-join 
                 (map write-sparql (cdr x))
-                ", ")))) )
-               
+                ", "))))               
+
+(define binary-operators '(+ - * / = != <= >= < >))
+
+(define (write-sparql-binary exp)
+  (and (member (car exp) binary-operators)
+       (format #f "~A ~A ~A"
+               (cadr exp)
+               (car exp)
+               (caddr exp))))          
 
 (define (write-sparql-special x #!optional (level 0))
   (let ((pre (apply conc (make-list level " "))))
     (or (write-sparql-function x)
+        (write-sparql-binary x)
         (case (car x)
           ((@Unit) (string-join (map write-sparql (cdr x)) ";\n"))
           ((@Prologue @Query) (conc (string-join (map write-sparql (cdr x)) "\n") "\n"))

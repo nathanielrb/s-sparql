@@ -79,11 +79,15 @@
 
 (define (rel->polish lst)
   (and (pair? lst)
+       (pair? (car lst))
+       (let ((lst (or (and (equal? (caar lst) '|@()|)
+                           (cdar lst))
+                      (car lst))))
        (if (= (length lst) 3)
            (list (cadr lst)
                  (car lst)
                  (caddr lst))
-           lst)))
+           lst))))
 
 ;; (define consumed-values (consumed-objects pair?))
 
@@ -521,28 +525,30 @@
 
 ;; To Polish Notation!!
 (define MultiplicativeExpression
-  (::
-   UnaryExpression
-   (:*
-    (alternatives
-     (:: (lit/sym "*")
-         UnaryExpression)
-     (:: (lit/sym "/")
-         UnaryExpression)))))
+  (->polish
+   (::
+    UnaryExpression
+    (:*
+     (alternatives
+      (:: (lit/sym "*")
+          UnaryExpression)
+      (:: (lit/sym "/")
+          UnaryExpression))))))
 
 ;; To Polish Notation!!
 (define AdditiveExpression
-  (:: MultiplicativeExpression
-      (:*
-       (alternatives
-        (:: (lit/sym "+") MultiplicativeExpression)
-        (:: (lit/sym "-") MultiplicativeExpression)
-        (:: 
-         (alternatives  NumericLiteralPositive NumericLiteralNegative)
-         (:*
-          (alternatives
-           (:: (lit/sym "*") UnaryExpression)
-           (:: (lit/sym "/") UnaryExpression))))))))
+  (->polish
+   (:: MultiplicativeExpression
+       (:*
+        (alternatives
+         (:: (lit/sym "+") MultiplicativeExpression)
+         (:: (lit/sym "-") MultiplicativeExpression)
+         (:: 
+          (alternatives  NumericLiteralPositive NumericLiteralNegative)
+          (:*
+           (alternatives
+            (:: (lit/sym "*") UnaryExpression)
+            (:: (lit/sym "/") UnaryExpression)))))))))
 				
 (define NumericExpression AdditiveExpression)
 
@@ -851,6 +857,7 @@
 
 ;; InlineData
 
+;; bug - BIND( ?a + ?b AS ?c) is not parsed into polish notation
 (define Bind
   (->list
    (:: 
@@ -1302,13 +1309,15 @@ FROM NAMED <http://www.google.com/app>
     UNION { ?a dc:title ?title }
     UNION { GRAPH ?g { ?l mu:function ?u } }
   FILTER( ?x < 20 )
-  BIND( mu:category AS ?g)
+    BIND (IF(DATATYPE(?o) = <http://www.w3.org/2001/XMLSchema#string>, STR(?o), ?newo) AS ?o)
   } 
 ORDER BY (LCASE(?label))
 LIMIT 10
 OFFSET 30
 
 "))
+
+;;   BIND( mu:category AS ?g)
 
 (define u (parse-query ;; (car (lex QueryUnit err "
 "PREFIX dc: <http://schema.org/dc/> 
