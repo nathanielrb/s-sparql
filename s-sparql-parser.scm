@@ -1103,7 +1103,7 @@
      (::
       (lit/sp "ORDER ")
       (lit/sp "BY")))
-    (:+ OrderCondition))))
+    (:+ (between-fws OrderCondition)))))
     
 ;; HavingClause
 
