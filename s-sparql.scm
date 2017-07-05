@@ -460,7 +460,7 @@
 (define (sparql/update query #!key (additional-headers '()))
   (let ((endpoint (*sparql-endpoint*)))
     (when (*print-queries?*)
-      (format #t "~%~%==Executing Query==~%~%~A" (add-prefixes query)))
+      (format (current-error-port) "~%~%==Executing Query==~%~%~A" (add-prefixes query)))
     (let-values (((result uri response)
 		  (with-input-from-request 
 		   (make-request method: 'POST
@@ -480,7 +480,7 @@
 (define (sparql/select query #!optional raw? #!key (additional-headers '()))
   (let ((endpoint (*sparql-endpoint*)))
     (when (*print-queries?*)
-	  (format #t "~%==Executing Query==~%~A~%" (add-prefixes query)))
+	  (format (current-error-port) "~%==Executing Query==~%~A~%" (add-prefixes query)))
     (let-values (((result uri response)
 		  (with-input-from-request 
 		   (make-request method: 'POST
