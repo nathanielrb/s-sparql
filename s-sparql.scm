@@ -36,6 +36,9 @@
            (hash-table-set! cache key body)
            (hash-table-ref cache key))))))
     
+(define (clear-hashed-cache! cache key)
+  (hash-table-delete! cache key))
+
 (define *expand-namespaces?* (make-parameter #t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
