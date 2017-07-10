@@ -679,8 +679,13 @@
 
 (define PathEltOrInverse
   (vac
-   (alternatives PathElt 
-                 (:: (char-list/lit "^") PathElt))))
+   (alternatives 
+    PathElt 
+    (->list
+     (::
+      (bind-consumed->symbol
+       (char-list/lit "^") )
+      PathElt)))))
 
 (define PathElt
    (:: PathPrimary (:? PathMod)))

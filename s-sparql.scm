@@ -1,7 +1,7 @@
 (module s-sparql *
 (import chicken scheme extras data-structures srfi-1) 
 
-(use srfi-13 http-client intarweb uri-common medea matchable irregex)
+(use srfi-13 srfi-69 http-client intarweb uri-common medea matchable irregex)
 
 (require-extension srfi-13)
 
@@ -174,6 +174,7 @@
         ((symbol? x) (symbol->string x))
         ((boolean? x) (if x "true" "false"))
         ((pair? x) (or (write-sparql-literal x)
+                       (write-sparql-inverse-element x)
 		       (write-sparql-special x)
                        (string-join (map (cut write-sparql <> (+ level 1))
 					 x)
@@ -192,6 +193,15 @@
        (if (langtag? (cdr x))
            (format #f "\"~A\"~A" (car x) (cdr x))
            (format #f "\"~A\"^^~A" (car x) (cdr x)))))
+
+(define (inverse-element? elt)
+  (and (pair? elt)
+       (equal? (car elt) '^)
+       (iri? (cadr elt))))
+
+(define (write-sparql-inverse-element elt)
+  (and (inverse-element? elt)
+       (format #f "~A~A" (car elt) (cadr elt))))
 
 (define functions '(COUNT SUM MIN MAX AVG SAMPLE STR LANG LANGMATCHES 
                           DATATYPE BOUND IRI URI BNODE RAND NIL ABS CEIL FLOOR ROUND IF
@@ -298,6 +308,7 @@
 (define (write-sparql-objects x)
   (if (pair? x)
       (or (write-sparql-literal x)
+          (write-sparql-inverse-element x)
 	  (write-sparql-special x)
           (string-join (map (lambda (y) (write-sparql y)) x) ", "))
       (write-sparql x)))
@@ -305,13 +316,11 @@
 (define (expand-special triple)
   (cond ((blank-node-path? (car triple))
          (let ((subject (new-blank-node)))
-           (print "blank subj")
             (append (expand-triple (cons subject (cdr triple)))
                     (expand-triple (cons subject (cdar triple))))))
         ((and (= (length triple) 3)
               (blank-node-path? (caddr triple)))
          (let ((object (new-blank-node)))
-           (print "blank obj " triple)
            (match triple
              ((s p (_ . rest))
                (append (expand-triple (list s p object))
