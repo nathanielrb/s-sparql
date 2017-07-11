@@ -64,16 +64,16 @@
 (define (car-when p)
   (and (pair? p) (car p)))
 
-(define (cons-when x p)
-  (if x (cons x p) p))
+(define (cons-when exp p)
+  (if exp (cons exp p) p))
 
-(define-syntax splice-when
-  (syntax-rules ()
-    ((splice-when body)
-     (let ((body-val body))
-       (splice-when body-val body-val)))
-    ((splice-when test body)
-     (if (or (not test) (null? test)) '() body))))
+;; (define-syntax splice-when
+;;   (syntax-rules ()
+;;     ((splice-when body)
+;;      (let ((body-val body))
+;;        (splice-when body-val body-val)))
+;;     ((splice-when test body)
+;;      (if (or (not test) (null? test)) '() body))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; data types
@@ -109,35 +109,38 @@
 (define (a? obj)
   (equal? 'a obj))
 
+(define (langtag? exp)
+  (and (symbol? exp)
+       (equal? (substring (symbol->string exp) 0 1) "@")))
+
+(define (typed-or-langtag-literal? exp)
+  (and (pair? exp) (not (list? exp))
+       (string? (car exp)) (symbol? (cdr exp))))
+
+(define (inverse-element? elt)
+  (and (pair? elt)
+       (equal? (car elt) '^)
+       (iri? (cadr elt))))
+
 (define (un-sparql-variable var)
   (string->symbol (substring (symbol->string var) 1)))
 
 (define (sparql-variable->string var)
   (substring (symbol->string var) 1))
 
-(define  (expand-uri x)
-  (if (pair? x)
-      (expand-namespace x)
-      x))
+(define (s-iri? elt)
+  (let ((s (->string elt)))
+    (and (string-prefix? "<" s)
+         (string-suffix? ">" s))))
 
-(define (write-uri uri)
-  (let ((str (symbol->string uri)))
-    (substring str 1 (- (string-length str) 1))))
-
-(define (rdf->json x)
-  (cond ((symbol? x) (write-uri x))
-	(else x)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Namespaces 
 
 (define (register-namespace name namespace)
   (*namespaces* (cons (list name namespace) (*namespaces*))))
 
 (define (lookup-namespace name #!optional (namespaces (*namespaces*)))
   (car (alist-ref name namespaces)))
-
-(define (s-iri? elt)
-  (let ((s (->string elt)))
-    (and (string-prefix? "<" s)
-         (string-suffix? ">" s))))
 
 (define (expand-namespace* ns-pair namespaces)
   (let ((pair (string-split (->string ns-pair) ":")))
@@ -165,43 +168,43 @@
          (read-uri (conc namespace elt)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; RDF
+;; Writing Sparql
 
-(define (write-sparql x #!optional (level 0))
-  (cond ((string? x) (conc "\"" x "\""))
-        ((keyword? x) (keyword->string x))
-        ((number? x) (number->string x))
-        ((symbol? x) (symbol->string x))
-        ((boolean? x) (if x "true" "false"))
-        ((pair? x) (or (write-sparql-literal x)
-                       (write-sparql-inverse-element x)
-		       (write-sparql-special x)
+(define  (expand-uri exp)
+  (if (pair? exp)
+      (expand-namespace exp)
+      exp))
+
+(define (write-uri uri)
+  (let ((str (symbol->string uri)))
+    (substring str 1 (- (string-length str) 1))))
+
+(define (rdf->json exp)
+  (cond ((symbol? exp) (write-uri exp))
+	(else exp)))
+
+(define (write-sparql exp #!optional (level 0))
+  (cond ((string? exp) (conc "\"" exp "\""))
+        ((keyword? exp) (keyword->string exp))
+        ((number? exp) (number->string exp))
+        ((symbol? exp) (symbol->string exp))
+        ((boolean? exp) (if exp "true" "false"))
+        ((pair? exp) (or (write-sparql-literal exp)
+                       (write-sparql-inverse-element exp)
+		       (write-sparql-special exp)
                        (string-join (map (cut write-sparql <> (+ level 1))
-					 x)
+					 exp)
 				    " ")))))
 
-(define (langtag? x)
-  (and (symbol? x)
-       (equal? (substring (symbol->string x) 0 1) "@")))
+(define (write-sparql-literal exp)
+  (and (typed-or-langtag-literal? exp) 
+       (if (langtag? (cdr exp))
+           (format #f "\"~A\"~A" (car exp) (cdr exp))
+           (format #f "\"~A\"^^~A" (car exp) (cdr exp)))))
 
-(define (typed-or-langtag-literal? x)
-  (and (pair? x) (not (list? x))
-       (string? (car x)) (symbol? (cdr x))))
-
-(define (write-sparql-literal x)
-  (and (typed-or-langtag-literal? x) 
-       (if (langtag? (cdr x))
-           (format #f "\"~A\"~A" (car x) (cdr x))
-           (format #f "\"~A\"^^~A" (car x) (cdr x)))))
-
-(define (inverse-element? elt)
-  (and (pair? elt)
-       (equal? (car elt) '^)
-       (iri? (cadr elt))))
-
-(define (write-sparql-inverse-element elt)
-  (and (inverse-element? elt)
-       (format #f "~A~A" (car elt) (cadr elt))))
+(define (write-sparql-inverse-element exp)
+  (and (inverse-element? exp)
+       (format #f "~A~A" (car exp) (cadr exp))))
 
 (define functions '(COUNT SUM MIN MAX AVG SAMPLE STR LANG LANGMATCHES 
                           DATATYPE BOUND IRI URI BNODE RAND NIL ABS CEIL FLOOR ROUND IF
@@ -211,15 +214,12 @@
                           SHA512 COALESCE  STRLANG STRDT isIRI isURI isBLANK isLITERAL isNUMERIC
                           REGEX SUBSTR REPLACE EXISTS))
 
-;;  GROUP_CONCAT 
-;; 'GROUP_CONCAT' '(' 'DISTINCT'? Expression ( ';' 'SEPARATOR' '=' String )? ')'
-
-(define (write-sparql-function x)
-  (and (member (car x) functions)
+(define (write-sparql-function exp)
+  (and (member (car exp) functions)
        (format #f "~A(~A)"
-               (car x)
+               (car exp)
                (string-join 
-                (map write-sparql (cdr x))
+                (map write-sparql (cdr exp))
                 ", "))))               
 
 (define binary-operators '(+ - * / = != <= >= < >))
@@ -231,43 +231,43 @@
                (car exp)
                (caddr exp))))          
 
-(define (write-sparql-special x #!optional (level 0))
+(define (write-sparql-special exp #!optional (level 0))
   (let ((pre (apply conc (make-list level " "))))
-    (or (write-sparql-function x)
-        (write-sparql-binary x)
-        (case (car x)
-          ((@Unit) (string-join (map write-sparql (cdr x)) ";\n"))
-          ((@Prologue @Query) (conc (string-join (map write-sparql (cdr x)) "\n") "\n"))
-          ((@Update) (conc (string-join (map write-sparql (cdr x)) "\n") "\n"))
-          ((@Dataset @Using) (string-join (map write-sparql (cdr x)) "\n"))
+    (or (write-sparql-function exp)
+        (write-sparql-binary exp)
+        (case (car exp)
+          ((@Unit) (string-join (map write-sparql (cdr exp)) ";\n"))
+          ((@Prologue @Query) (conc (string-join (map write-sparql (cdr exp)) "\n") "\n"))
+          ((@Update) (conc (string-join (map write-sparql (cdr exp)) "\n") "\n"))
+          ((@Dataset @Using) (string-join (map write-sparql (cdr exp)) "\n"))
 
           ;; ?? how to differentiate between triple collections and functions etc.?
           ((|@()|) (format #f "(~A)"
                            (string-join 
-                            (map (cut write-sparql <> (+ level 1)) (cdr x)) 
+                            (map (cut write-sparql <> (+ level 1)) (cdr exp)) 
                             " ")))
 
           ((|@[]|) (format #f "[ ~A ]"
                            (string-join
-                            (map write-sparql-properties (cdr x)) 
+                            (map write-sparql-properties (cdr exp)) 
                             " ")))
           ((UNION)     
            (conc pre
-                 (string-join  (map (cut write-sparql-triple <> (+ level 1)) (cdr x))
+                 (string-join  (map (cut write-sparql-triple <> (+ level 1)) (cdr exp))
                                (format #f "~%~AUNION " pre))))
           ((GRAPH) (format #f "~AGRAPH ~A ~A  "
-                           pre (write-sparql (cadr x))
-                           (write-sparql-triple (cddr x) (+ level 1))))
+                           pre (write-sparql (cadr exp))
+                           (write-sparql-triple (cddr exp) (+ level 1))))
           ((WHERE MINUS OPTIONAL DELETE INSERT
                   |DELETE WHERE| |DELETE DATA| |INSERT DATA|)
-           (format #f "~A~A ~A" pre (car x) (write-sparql-triple (cdr x) (+ level 1))))
+           (format #f "~A~A ~A" pre (car exp) (write-sparql-triple (cdr exp) (+ level 1))))
           ((BIND FILTER) (format #f "~A~A ~A"
-                          pre (car x) (string-join (map write-sparql (cdr x)) " ")))
+                          pre (car exp) (string-join (map write-sparql (cdr exp)) " ")))
           ((AS) (format #f "(~A AS ~A)"
-                        (write-sparql (cadr x))
-                        (write-sparql (caddr x))))
+                        (write-sparql (cadr exp))
+                        (write-sparql (caddr exp))))
           ((VALUES) (format #f "~AVALUES ~A { ~A }"
-                            pre (write-sparql (cadr x)) (write-sparql (caddr x))))
+                            pre (write-sparql (cadr exp)) (write-sparql (caddr exp))))
           (else #f)))))
   
 (define (write-sparql-triple triple #!optional (level 0))
@@ -275,13 +275,14 @@
       "{}"
       (or (write-sparql-special triple level)
           (let ((pre (apply conc (make-list level " "))))
-            (if (pair? (car triple)) ;; list of triples
-                
-                ;; abstract the spacing
-                ;; and think about singletons : { a b c. }
-                (format #f "{~%~A~%~A}"
-                        (string-join (map (cut write-sparql-triple <> (+ level 1)) triple) "\n")
-                        pre)
+             ;; list of triples
+            (if (pair? (car triple))
+                (if (= (length triple) 1)
+                    (format #f "{ ~A }"
+                        (write-sparql-triple (car triple) (+ level 1)))
+                    (format #f "{~%~A~%~A}"
+                            (string-join (map (cut write-sparql-triple <> (+ level 1)) triple) "\n")
+                            pre))
                 (conc
                  pre
                  (string-join
@@ -295,23 +296,26 @@
                            (write-sparql-objects objects)))))
                  "."))))))
 
-(define (write-sparql-properties x)
-  (if (pair? x)
+(define (write-sparql-properties exp)
+  (if (pair? exp)
       (string-join (map (lambda (property)
                           (format #f "~A ~A"
                                   (write-sparql (car property))
                                   (write-sparql-objects (cadr property))))
-                        x)
+                        exp)
                    ";  ")
-      (write-sparql x)))
+      (write-sparql exp)))
 
-(define (write-sparql-objects x)
-  (if (pair? x)
-      (or (write-sparql-literal x)
-          (write-sparql-inverse-element x)
-	  (write-sparql-special x)
-          (string-join (map (lambda (y) (write-sparql y)) x) ", "))
-      (write-sparql x)))
+(define (write-sparql-objects exp)
+  (if (pair? exp)
+      (or (write-sparql-literal exp)
+          (write-sparql-inverse-element exp)
+	  (write-sparql-special exp)
+          (string-join (map (lambda (y) (write-sparql y)) exp) ", "))
+      (write-sparql exp)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Expand RDF triples
 
 (define (expand-special triple)
   (cond ((blank-node-path? (car triple))
@@ -374,7 +378,7 @@
              (expand-expanded-triple subject predicate objects))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; RDF Convenience Functions
+;; Convenience Functions
 
 (define (s-triple triple)
   (if (string? triple)
@@ -469,6 +473,9 @@
 	  (expand-namespace-prefixes (*namespaces*))
 	  query))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; SPARQL Endpoint
+
 (define (sparql/update query #!key (additional-headers '()))
   (let ((endpoint (*sparql-endpoint*)))
     (when (*print-queries?*)
@@ -547,7 +554,7 @@
     ((query-unique-with-vars (vars ...) query form)
      (car-when (query-with-vars (vars ...) query form)))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Startup
 
 (define-namespace foaf "http://xmlns.com/foaf/0.1/")

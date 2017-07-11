@@ -177,7 +177,6 @@
 (define ANON
   (->alist
    '|@[]|
-   ;;(bind-consumed->symbol
     (:: (drop-consumed (lit/sp "["))
         (drop-consumed (:? fws))
         (drop-consumed (lit/sp "]")))))
@@ -1278,83 +1277,5 @@
 
 (define (unit-update-insert QueryUnit)
   (assoc-when 'INSERT (unit-update QueryUnit)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Tests
-
-(define r (parse-query "PREFIX pre: <http://www.home.com/> 
-                  PREFIX pre: <http://www.gooogle.com/> 
-SELECT ?a ?a
-FROM <http://www.google.com/>
-FROM NAMED <http://www.google.com/>  
-  WHERE {
-    [] ?p ?o .
-    [?b ?v] ?o ?v .
-    ?p ?x ?x, ?zoop  .
-     ?p ?z ?l, ?m, ?o; ?zan ?zim, ?zing, ?zot;
-  } 
-"))
-
-(define s (parse-query "PREFIX pre: <http://www.home.com/> 
-                  PREFIX rdf: <http://www.gooogle.com/> 
-SELECT ?a ?a
-FROM <http://www.google.com/>
-FROM NAMED <http://www.google.com/>  
-  WHERE {
-     GRAPH ?g { ?s ?p ?o }
-  } 
-"))
-
-(define t
-  (parse-query
-"PREFIX dc: <http://schema.org/dc/> 
-PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-
-SELECT ?a ?b (COUNT(?a) AS ?count)
-FROM <http://www.google.com/>
-FROM NAMED <http://www.google.com/app>  
-  WHERE {
-   { ?a mu:uuid ?b . ?c mu:uuid ?e . ?f ?g ?h }
-   UNION   { ?s mu:uuid ?o, ?p, ?q }  
-    UNION { ?a dc:title ?title }
-    UNION { GRAPH ?g { ?l mu:function ?u } }
-  FILTER( ?x < 20 )
-    BIND (IF(DATATYPE(?o) = <http://www.w3.org/2001/XMLSchema#string>, STR(?o), ?newo) AS ?o)
-  } 
-ORDER BY (LCASE(?label))
-LIMIT 10
-OFFSET 30
-
-"))
-
-;;   BIND( mu:category AS ?g)
-
-(define u (parse-query ;; (car (lex QueryUnit err "
-"PREFIX dc: <http://schema.org/dc/> 
-PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-
-DELETE WHERE {
-   ?a mu:uuid ?b . ?c mu:uuid ?e . ?f ?g ?h
-  } 
-
-"))
-
-
-(define vs
-"PREFIX dc: <http://schema.org/dc/> 
-PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-
-DELETE {
-   ?a mu:uuid ?b, ?c, ?d . ?c mu:uuid ?e . ?f ?g ?h
-  } 
-WHERE {
-  ?s ?p \"abc\"@en.
-FILTER( ?s < 10)
-}
-
-")
-
-(define v (parse-query vs))
-(use s-sparql)
 
 )
