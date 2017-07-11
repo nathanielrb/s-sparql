@@ -249,18 +249,18 @@
 
           ((|@[]|) (format #f "[ ~A ]"
                            (string-join
-                            (map write-sparql-properties (cdr exp)) 
+                            (map write-triple-properties (cdr exp)) 
                             " ")))
           ((UNION)     
            (conc pre
-                 (string-join  (map (cut write-sparql-triple <> (+ level 1)) (cdr exp))
+                 (string-join  (map (cut write-triple <> (+ level 1)) (cdr exp))
                                (format #f "~%~AUNION " pre))))
           ((GRAPH) (format #f "~AGRAPH ~A ~A  "
                            pre (write-sparql (cadr exp))
-                           (write-sparql-triple (cddr exp) (+ level 1))))
+                           (write-triple (cddr exp) (+ level 1))))
           ((WHERE MINUS OPTIONAL DELETE INSERT
                   |DELETE WHERE| |DELETE DATA| |INSERT DATA|)
-           (format #f "~A~A ~A" pre (car exp) (write-sparql-triple (cdr exp) (+ level 1))))
+           (format #f "~A~A ~A" pre (car exp) (write-triple (cdr exp) (+ level 1))))
           ((BIND FILTER) (format #f "~A~A ~A"
                           pre (car exp) (string-join (map write-sparql (cdr exp)) " ")))
           ((AS) (format #f "(~A AS ~A)"
@@ -270,7 +270,7 @@
                             pre (write-sparql (cadr exp)) (write-sparql (caddr exp))))
           (else #f)))))
   
-(define (write-sparql-triple triple #!optional (level 0))
+(define (write-triple triple #!optional (level 0))
   (if (null? triple)
       "{}"
       (or (write-sparql-special triple level)
@@ -279,9 +279,9 @@
             (if (pair? (car triple))
                 (if (= (length triple) 1)
                     (format #f "{ ~A }"
-                        (write-sparql-triple (car triple) (+ level 1)))
+                        (write-triple (car triple) (+ level 1)))
                     (format #f "{~%~A~%~A}"
-                            (string-join (map (cut write-sparql-triple <> (+ level 1)) triple) "\n")
+                            (string-join (map (cut write-triple <> (+ level 1)) triple) "\n")
                             pre))
                 (conc
                  pre
@@ -289,24 +289,24 @@
                   (match triple
                     ((subject properties) 
                      (list (write-sparql subject)
-                           (write-sparql-properties properties)))
+                           (write-triple-properties properties)))
                     ((subject predicate objects)
                      (list (write-sparql subject)
-                           (write-sparql-properties predicate)
-                           (write-sparql-objects objects)))))
+                           (write-triple-properties predicate)
+                           (write-triple-objects objects)))))
                  "."))))))
 
-(define (write-sparql-properties exp)
+(define (write-triple-properties exp)
   (if (pair? exp)
       (string-join (map (lambda (property)
                           (format #f "~A ~A"
                                   (write-sparql (car property))
-                                  (write-sparql-objects (cadr property))))
+                                  (write-triple-objects (cadr property))))
                         exp)
                    ";  ")
       (write-sparql exp)))
 
-(define (write-sparql-objects exp)
+(define (write-triple-objects exp)
   (if (pair? exp)
       (or (write-sparql-literal exp)
           (write-sparql-inverse-element exp)
@@ -383,14 +383,16 @@
 (define (s-triple triple)
   (if (string? triple)
       triple
-      (write-sparql-triple triple)))
+      (write-triple triple)))
 
 (define (s-triples trips)
   (string-join (map s-triple trips) "\n"))
 
+;; x
 (define (triple a b c)
   (s-triple (list a b c)))
 
+;; x
 (define (triples trips)
   (string-join trips "\n"))
 
