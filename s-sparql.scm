@@ -277,12 +277,12 @@
           (let ((pre (apply conc (make-list level " "))))
              ;; list of triples
             (if (pair? (car triple))
-                (if (= (length triple) 1)
-                    (format #f "{ ~A }"
-                        (write-triple (car triple) (+ level 1)))
-                    (format #f "{~%~A~%~A}"
-                            (string-join (map (cut write-triple <> (+ level 1)) triple) "\n")
-                            pre))
+                ;; (if (= (length triple) 1)
+                ;;     (format #f "{ ~A }"
+                ;;         (write-triple (car triple) (+ level 1)))
+                (format #f "{~%~A~%~A}"
+                        (string-join (map (cut write-triple <> (+ level 1)) triple) "\n")
+                        pre)
                 (conc
                  pre
                  (string-join
