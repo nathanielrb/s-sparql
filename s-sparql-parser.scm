@@ -296,12 +296,12 @@
 
 (define IRIREF ;; ** really cheating
   (concatenation
-   (char-list/lit "<http://")
+   (char-list/lit "<")
    (repetition1 
     (alternatives ;; should be list-from-string
      char-list/alpha
      char-list/decimal
-     (set-from-string "-_&?#./+")))
+     (set-from-string "-_&?#.:/+")))
 ;     (char-list/lit "/")))
    (char-list/lit ">")))
 
