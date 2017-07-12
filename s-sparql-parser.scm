@@ -683,15 +683,24 @@
     (->list
      (::
       (bind-consumed->symbol
-       (char-list/lit "^") )
+       (char-list/lit "^"))
       PathElt)))))
 
 (define PathElt
    (:: PathPrimary (:? PathMod)))
 
 (define PathSequence
-  (:: PathEltOrInverse
-      (:* (:: (lit/sp "/") PathEltOrInverse))))
+  (vac
+   (alternatives
+    (->alist 
+     '/
+     (:: 
+      PathEltOrInverse
+      (drop-consumed (lit/sp "/"))
+      PathSequence))
+    PathEltOrInverse)))
+  ;; (:: PathEltOrInverse
+  ;;     (:* (:: (lit/sp "/") PathEltOrInverse))))
 
 (define PathAlternative
    (:: PathSequence
@@ -1224,10 +1233,21 @@
 
 (define TopLevel (alternatives QueryUnit UpdateUnit))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; API
+
 ;; should also read from ports
 (define (parse-query query)
   ;;(cons '@TOP
   (car (lex TopLevel err query)))
+
+(define (read-query query)
+  ;;(cons '@TOP
+  (car (lex TopLevel err query)))
+
+(define (read-triples query)
+  ;;(cons '@TOP
+  (car (lex GroupGraphPatternSub err query)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Accessors

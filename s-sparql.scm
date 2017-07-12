@@ -119,8 +119,11 @@
 
 (define (inverse-element? elt)
   (and (pair? elt)
-       (equal? (car elt) '^)
-       (iri? (cadr elt))))
+       (equal? (car elt) '^)))
+
+(define (element-path? elt)
+  (and (pair? elt)
+       (equal? (car elt) '/)))
 
 (define (un-sparql-variable var)
   (string->symbol (substring (symbol->string var) 1)))
@@ -163,7 +166,7 @@
   (syntax-rules ()
     ((define-namespace name namespace)
      (begin
-       (register-namespace (quote name) namespace) ;  (->string
+       (register-namespace (quote name) namespace)
        (define (name elt)
          (read-uri (conc namespace elt)))))))
 
@@ -191,6 +194,7 @@
         ((boolean? exp) (if exp "true" "false"))
         ((pair? exp) (or (write-sparql-literal exp)
                        (write-sparql-inverse-element exp)
+                       (write-sparql-element-path exp)
 		       (write-sparql-special exp)
                        (string-join (map (cut write-sparql <> (+ level 1))
 					 exp)
@@ -204,7 +208,13 @@
 
 (define (write-sparql-inverse-element exp)
   (and (inverse-element? exp)
-       (format #f "~A~A" (car exp) (cadr exp))))
+       (format #f "~A~A" (car exp) (write-sparql (cadr exp)))))
+
+(define (write-sparql-element-path exp)
+  (and (element-path? exp)
+       (format #f "~A/~A" 
+               (write-sparql (cadr exp))
+               (write-sparql (caddr exp)))))
 
 (define functions '(COUNT SUM MIN MAX AVG SAMPLE STR LANG LANGMATCHES 
                           DATATYPE BOUND IRI URI BNODE RAND NIL ABS CEIL FLOOR ROUND IF
@@ -310,6 +320,7 @@
   (if (pair? exp)
       (or (write-sparql-literal exp)
           (write-sparql-inverse-element exp)
+          (write-sparql-element-path exp)
 	  (write-sparql-special exp)
           (string-join (map (lambda (y) (write-sparql y)) exp) ", "))
       (write-sparql exp)))
