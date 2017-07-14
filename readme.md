@@ -1,8 +1,8 @@
 # s-sparql
 
-Chicken Scheme module for reading, writing, and transforming SPARQL queries as s-expressions.
+**\*\*Work in progress, subject to change!\*\***
 
-**Work in progress, subject to change**
+Chicken Scheme module for reading, writing, and transforming SPARQL queries as s-expressions.
 
 ## Installation
 
