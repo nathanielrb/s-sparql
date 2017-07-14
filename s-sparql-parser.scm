@@ -649,19 +649,52 @@
 (define TriplesNode
    (alternatives Collection BlankNodePropertyList)) ;; ** !!
 
-;; Integer
+(define Integer INTEGER)
 
-;; PathOneInPropertySet
+;; check priorities and grouping for paths,
+;;  e.g., ^dc:title*
 
-;; PathNegatedPropertySet
+(define PathOneInPropertySet
+  (alternatives
+   iri
+   (lit/sym "a")
+   (->list
+    (::
+     (bind-consumed->symbol
+      (char-list/lit "^"))
+     (alternatives
+      iri
+      (lit/sym "a"))))))
+
+(define PathNegatedPropertySet
+  (alternatives
+   PathOneInPropertySet
+   (->alist
+    '|@()| 
+    (::
+     (drop-consumed (lit/sp "("))
+     (alternatives
+      (->alist
+       '||
+       (:: 
+        PathOneInPropertySet
+        (:+
+         (::
+          (drop-consumed (lit/sp "|"))
+          PathOneInPropertySet))))
+      PathOneInPropertySet)
+     (drop-consumed (lit/sp ")"))))))
 
 (define PathPrimary
   (vac
     (alternatives
      iri
-     ;;(bind-consumed->symbol (char-list/lit "a"))
      (lit/sym "a")
-     ;; (:: (char-list/lit "!") PathNegatedPropertySet) ;; ** !!
+     (->alist
+      '!
+      (:: 
+       (drop-consumed (char-list/lit "!"))
+       PathNegatedPropertySet))
      (->alist
       '|@()| 
       (::
@@ -674,7 +707,7 @@
    (::
     (set-from-string "?*+")
     (drop-consumed
-     (char-list/lit " "))))) ;; ??
+     (char-list/lit " "))))) ;; necessary to avoid following ?var
 
 (define PathEltOrInverse
   (vac
@@ -687,7 +720,12 @@
       PathElt)))))
 
 (define PathElt
-   (:: PathPrimary (:? PathMod)))
+  ;; (:: PathPrimary (:? PathMod)))
+  (alternatives
+   (->alist '? (:: PathPrimary (drop-consumed (lit/sp "? "))))
+   (->alist '+ (:: PathPrimary (drop-consumed (lit/sp "+ "))))
+   (->alist '* (:: PathPrimary (drop-consumed (lit/sp "* "))))
+   PathPrimary))
 
 (define PathSequence
   (vac
@@ -699,13 +737,17 @@
       (drop-consumed (lit/sp "/"))
       PathSequence))
     PathEltOrInverse)))
-  ;; (:: PathEltOrInverse
-  ;;     (:* (:: (lit/sp "/") PathEltOrInverse))))
 
 (define PathAlternative
-   (:: PathSequence
-       (:*
-	(:: (lit/sp "|") PathSequence))))
+  (alternatives
+   (->alist
+    '||
+    (:: PathSequence
+        (:+
+         (::
+          (drop-consumed (lit/sp "|"))
+          PathSequence))))
+   PathSequence))
 
 (define Path PathAlternative)
 

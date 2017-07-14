@@ -1,4 +1,4 @@
-;(module s-sparql *
+(module s-sparql *
 (import chicken scheme extras data-structures srfi-1) 
 
 (use srfi-13 srfi-69 http-client intarweb uri-common medea matchable irregex)
@@ -624,4 +624,4 @@
 (define-namespace owl "http://www.w3.org/2002/07/owl#")
 (define-namespace skos "http://www.w3.org/2004/02/skos/core#")
 
-;)
+)
