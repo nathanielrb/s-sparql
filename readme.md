@@ -130,7 +130,7 @@ Define namespaces for querying and expanding. The following namespaces are defin
 
 ### Writing SPARQL 
 
-[parameter] parameter (\*expand-namespaces?\*)
+[parameter] (\*expand-namespaces?\*)
 
 Defaults to #t.
 
