@@ -96,34 +96,136 @@ WHERE {
 }
 ")
 
-;; => ((@Unit 
-;;      (@Prologue
-;;        (PREFIX |schema:| <http://schema.org/>)
-;;        (PREFIX |dc:| <http://purl.org/dc/elements/>))
-;;      (@Query
-;;        (SELECT *)
-;;        (@Dataset (FROM <http://example.com/data/>))
-;;         (WHERE (?s ((?p (?o ?t))
-;;                     (dc:title (?x))))
-;;                (?s ((a (schema:Person))))))))
+;; => '((@Unit 
+;;       (@Prologue
+;;         (PREFIX |schema:| <http://schema.org/>)
+;;         (PREFIX |dc:| <http://purl.org/dc/elements/>))
+;;       (@Query
+;;         (SELECT *)
+;;         (@Dataset (FROM <http://example.com/data/>))
+;;          (WHERE (?s ((?p (?o ?t))
+;;                      (dc:title (?x))))
+;;                 (?s ((a (schema:Person))))))))
 ```
 
 ## s-sparql format
 
-### Triples
-
-### Path Expressions
-
-### Arithmetic
 ## API
+
+### General
+
+**(define-namespace prefix namespace)**
+
+Define namespaces for querying and expanding. The following namespaces are defined by default:
+
+```
+(define-namespace foaf "http://xmlns.com/foaf/0.1/")
+(define-namespace dc "http://purl.org/dc/elements/1.1/")
+(define-namespace rdf "http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+(define-namespace owl "http://www.w3.org/2002/07/owl#")
+(define-namespace skos "http://www.w3.org/2004/02/skos/core#")
+```
 
 ### Writing SPARQL 
 
+**parameter (*expand-namespaces?*)**
+
+Defaults to #t.
+
+**(write-triples triples)**
+
+Returns the RDF expression of the given s-sparql expression, which should be a list of triples as defined above.
+
+**(write-sparql query)**
+
+Returns the RDF expression of the given s-sparql expression, which should be a full or partial SPARQL query, but not a triples block.
+
+**(new-sparql-variable)**
+
+**(new-blank-node #!optional prefix)**
+
+**(sparql-variable string)**
+
+**(expand-namespace nspair)**
+
+```
+(expand-namespace 'dc:title) ;; => '<http://purl.org/dc/elements/1.1/title>
+```
+
+**(write-uri uri)**
+
 ### Parsing SPARQL
+
+**(read-triples <string>)**
+**(read-sparql <string>)**
+
+Return the s-sparql representation of the given string.
+
+**(read-uri string)**
+
+### Convenience functions
+
+Functions for writing queries without using the complete s-sparql format.
+
+**parameter (*default-graph*)**
+
+s-sparql representation of the default graph for queries, e.g., `(*default-graph* '<http://example.org/application>)`. If this is set, a "WITH <GRAPH>" is added to `s-select`, `s-insert` and `s-delete` expressions.
 
 ### Querying SPARQL Endpoints
 
+**parameter (*sparql-endpoint*)**
+
+Defaults to "http://127.0.0.1:8890/sparql".
+
+**parameter (*print-queries?*) boolean**
+
+Defaults to #t.
+
+**(sparql/select query #!optional raw? #!key additional-headers)**
+
+**(sparql/select-unique query #!optional raw? #!key additional-headers)**
+
+Returns a list of association lists representing the variable bindings, or in the case of unique, a single alist.
+
+```
+(sparql/select "SELECT * WHERE { ?s ?p ?o }")
+
+;; => '(((s . "s1") (p . "p1"))
+;;      ((s . "s2") (p . "p2")))
+
+(sparql/select-unique "SELECT * WHERE { ?s ?p ?o }")
+
+;; => '((s . "s1") (p . "p1"))
+
+```
+
+**(sparql/update query #!key additional-headers)**
+
+**(query-with-vars (vars ...) query form)**
+
+**(query-unique-with-vars (vars ...) query form)**
+
+```
+(query-with-vars (s p)
+  "SELECT * WHERE { ?s ?p ?o }"
+  (list s p))
+
+;; => '(("s1" "p1") ("s2" "p2"))
+
+(query-unique-with-vars (s p)
+  "SELECT * WHERE { ?s ?p ?o }"
+  (list s p))
+
+;; => '("s1" "p1")
+
+```
+
 ### Transformations
+
+**(expand-triples triples)**
+
+**(expand-triple triple)**
+
 
 
 
