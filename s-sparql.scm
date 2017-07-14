@@ -1,4 +1,4 @@
-(module s-sparql *
+;(module s-sparql *
 (import chicken scheme extras data-structures srfi-1) 
 
 (use srfi-13 srfi-69 http-client intarweb uri-common medea matchable irregex)
@@ -100,6 +100,43 @@
 (define (blank-node-path? obj)
   (and (list? obj)
        (blank-node? (car obj))))
+
+(define (inverse-path? obj)
+  (and (pair? obj)
+       (equal? (car obj) '^)))
+
+(define (sequence-path? obj)
+  (and (pair? obj)
+       (equal? (car obj) '/)))
+
+(define (alternative-path? obj)
+  (and (pair? obj)
+       (equal? (car obj) '||)))
+
+(define (zero-or-more-path? obj)
+  (and (pair? obj)
+       (equal? (car obj) '*)))
+
+(define (one-or-more-path? obj)
+  (and (pair? obj)
+       (equal? (car obj) '+)))
+
+(define (zero-or-one-path? obj)
+  (and (pair? obj)
+       (equal? (car obj) '?)))
+
+(define (negated-set? obj)
+  (and (pair? obj)
+       (equal? (car obj) '!)))
+
+(define (property-path? obj)
+  (or (inverse-path? obj)
+      (sequence-path? obj)
+      (alternative-path? obj)
+      (zero-or-more-path? obj)
+      (one-or-more-path? obj)
+      (zero-or-one-path? obj)
+      (negated-set? obj)))
 
 (define (iri? obj)
   (and (symbol? obj)
@@ -339,7 +376,7 @@
            (match triple
              ((s p (_ . rest))
                (append (expand-triple (list s p object))
-                       (expand-triple (cons object rest)))))))
+                       (expand-triple (cons object rest)))))))        
         (else
          (case (car triple)
            ((WHERE DELETE INSERT) 
@@ -355,14 +392,30 @@
            ((FILTER BIND) (list triple))
            (else #f)))))
 
+(define (expand-sequence-path-triple triple)
+  (and (= (length triple) 3)
+       (sequence-path? (cadr triple))
+       (match triple
+         ((s (`/ . ps) o)
+          (let loop ((s s)
+                     (ps ps))
+            (if (= (length ps) 1)
+                (expand-triple (list s (car ps) o))
+                (let ((object (new-blank-node)))
+                  (append (expand-triple (list s (car ps) object))
+                          (loop object (cdr ps))))))))))
+
 (define (expand-triples triples)
   (or (expand-special triples)
       (join (map expand-triple triples))))
 
 (define (expand-expanded-triple s p o)
-  (if (blank-node-path? o)
-      (expand-special (list s p o))
-      (list (list s p o))))
+  (cond  ((blank-node-path? o)
+          (expand-special (list s p o)))
+         ((sequence-path? p)
+          (expand-sequence-path-triple (list s p o)))
+         (else
+          (list (list s p o)))))
 
 (define (expand-triple triple)
   (or (expand-special triple)
@@ -576,4 +629,4 @@
 (define-namespace owl "http://www.w3.org/2002/07/owl#")
 (define-namespace skos "http://www.w3.org/2004/02/skos/core#")
 
-)
+;)
