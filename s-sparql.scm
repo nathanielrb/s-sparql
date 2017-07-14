@@ -210,11 +210,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Writing Sparql
 
-(define  (expand-uri exp)
-  (if (pair? exp)
-      (expand-namespace exp)
-      exp))
-
 (define (write-uri uri)
   (let ((str (symbol->string uri)))
     (substring str 1 (- (string-length str) 1))))
