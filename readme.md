@@ -116,7 +116,7 @@ WHERE {
 
 ### General
 
-**(define-namespace prefix namespace)**
+[procedure] (define-namespace prefix namespace)
 
 Define namespaces for querying and expanding. The following namespaces are defined by default:
 
@@ -130,62 +130,62 @@ Define namespaces for querying and expanding. The following namespaces are defin
 
 ### Writing SPARQL 
 
-**parameter (\*expand-namespaces?\*)**
+[parameter] parameter (\*expand-namespaces?\*)
 
 Defaults to #t.
 
-**(write-triples triples)**
+[procedure] (write-triples triples)
 
 Returns the RDF expression of the given s-sparql expression, which should be a list of triples as defined above.
 
-**(write-sparql query)**
+[procedure] (write-sparql query)
 
 Returns the RDF expression of the given s-sparql expression, which should be a full or partial SPARQL query, but not a triples block.
 
-**(new-sparql-variable)**
+[procedure] (new-sparql-variable)
 
-**(new-blank-node #!optional prefix)**
+[procedure] (new-blank-node #!optional prefix)
 
-**(sparql-variable string)**
+[procedure] (sparql-variable string)
 
-**(expand-namespace nspair)**
+[procedure] (expand-namespace nspair)
 
 ```
 (expand-namespace 'dc:title) ;; => '<http://purl.org/dc/elements/1.1/title>
 ```
 
-**(write-uri uri)**
+[procedure] (write-uri uri)
 
 ### Parsing SPARQL
 
-**(read-triples <string>)**
-**(read-sparql <string>)**
+[procedure] (read-triples <string>)
+[procedure] (read-sparql <string>)
 
 Return the s-sparql representation of the given string.
 
-**(read-uri string)**
+[procedure] (read-uri string)
 
 ### Convenience functions
 
 Functions for writing queries without using the complete s-sparql format.
 
-**parameter (\*default-graph\*)**
+[parameter] (\*default-graph\*)
 
 s-sparql representation of the default graph for queries, e.g., `(\*default-graph* '<http://example.org/application>)`. If this is set, a "WITH <GRAPH>" is added to `s-select`, `s-insert` and `s-delete` expressions.
 
 ### Querying SPARQL Endpoints
 
-**parameter (\*sparql-endpoint\*)**
+[parameter] (\*sparql-endpoint\*)
 
 Defaults to "http://127.0.0.1:8890/sparql".
 
-**parameter (\*print-queries?\*) boolean**
+[parameter] (\*print-queries?\*) boolean
 
 Defaults to #t.
 
-**(sparql/select query #!optional raw? #!key additional-headers)**
+[procedure] (sparql/select query #!optional raw? #!key additional-headers)
 
-**(sparql/select-unique query #!optional raw? #!key additional-headers)**
+[procedure] (sparql/select-unique query #!optional raw? #!key additional-headers)
 
 Returns a list of association lists representing the variable bindings, or in the case of unique, a single alist.
 
@@ -201,11 +201,11 @@ Returns a list of association lists representing the variable bindings, or in th
 
 ```
 
-**(sparql/update query #!key additional-headers)**
+[procedure] (sparql/update query #!key additional-headers)
 
-**(query-with-vars (vars ...) query form)**
+[procedure] (query-with-vars (vars ...) query form)
 
-**(query-unique-with-vars (vars ...) query form)**
+[procedure] (query-unique-with-vars (vars ...) query form)
 
 ```
 (query-with-vars (s p)
@@ -224,9 +224,9 @@ Returns a list of association lists representing the variable bindings, or in th
 
 ### Transformations
 
-**(expand-triples triples)**
+[procedure] (expand-triples triples)
 
-**(expand-triple triple)**
+[procedure] (expand-triple triple)
 
 
 
