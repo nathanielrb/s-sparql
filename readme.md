@@ -17,7 +17,7 @@ Clone this repo and run `sudo chicken-install` in the main directory. Requires C
 
 **s-sparql** use s-expressions to represent SPARQL queries. This allows for easy parsing, transforming, and writing whole queries as well as simple triple groups.
 
-A triple can be represented as a list of subject, predicate, and object: `'(?s ?p ?o)`, of subject, predicate, and objects: `'(?s ?p (?q ?r ?s))`, or of subject and predicates: ``(?s ((?p ?o) (?q ?u) (?r (?x ?y))))`. For example:
+A triple can be represented as a list of subject, predicate, and object: `'(?s ?p ?o)`, of subject, predicate, and objects: `'(?s ?p (?q ?r ?s))`, or of subject and predicates: `(?s ((?p ?o) (?q ?u) (?r (?x ?y))))`. For example:
 
 ```
 (define-namespace schema "http://schema.org/")
@@ -75,7 +75,9 @@ Using convenience functions (prefixed with `s-`) we can easily query a SPARQL en
 ;; => '((?a ?b _:b3457) (_:b3457 ?x ?y))
 ```
 
-**s-sparql-parser** allows parsing of triple blocks and full queries. Note that the parser always parses triples as nested lists, so `(read-triples "?s ?p ?o.")` returns `'(?s ((?p (?o))))` which is equivalent to `'(?s ?p ?o)`.
+**s-sparql-parser** allows parsing of triple blocks and full queries. 
+
+**Note** that the parser always parses triples as nested lists, so `(read-triples "?s ?p ?o.")` returns `'(?s ((?p (?o))))` which is equivalent to `'(?s ?p ?o)`.
 
 ```
 (read-triples "?s ex:friend ?a, ?b. ?a ex:friend ?b")
@@ -128,7 +130,7 @@ Define namespaces for querying and expanding. The following namespaces are defin
 
 ### Writing SPARQL 
 
-**parameter (*expand-namespaces?*)**
+**parameter (\*expand-namespaces?\*)**
 
 Defaults to #t.
 
@@ -167,17 +169,17 @@ Return the s-sparql representation of the given string.
 
 Functions for writing queries without using the complete s-sparql format.
 
-**parameter (*default-graph*)**
+**parameter (\*default-graph\*)**
 
-s-sparql representation of the default graph for queries, e.g., `(*default-graph* '<http://example.org/application>)`. If this is set, a "WITH <GRAPH>" is added to `s-select`, `s-insert` and `s-delete` expressions.
+s-sparql representation of the default graph for queries, e.g., `(\*default-graph* '<http://example.org/application>)`. If this is set, a "WITH <GRAPH>" is added to `s-select`, `s-insert` and `s-delete` expressions.
 
 ### Querying SPARQL Endpoints
 
-**parameter (*sparql-endpoint*)**
+**parameter (\*sparql-endpoint\*)**
 
 Defaults to "http://127.0.0.1:8890/sparql".
 
-**parameter (*print-queries?*) boolean**
+**parameter (\*print-queries?\*) boolean**
 
 Defaults to #t.
 
