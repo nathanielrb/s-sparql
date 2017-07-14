@@ -1283,7 +1283,7 @@
   ;;(cons '@TOP
   (car (lex TopLevel err query)))
 
-(define (read-query query)
+(define (read-sparql query)
   ;;(cons '@TOP
   (car (lex TopLevel err query)))
 

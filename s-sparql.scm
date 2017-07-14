@@ -382,6 +382,9 @@
           (string-join (map (lambda (y) (write-sparql y)) exp) ", "))
       (write-sparql exp)))
 
+(define (write-triples triples)
+  (string-join (map s-triple triples) "\n"))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Expand RDF triples
 
@@ -469,8 +472,7 @@
       triple
       (write-triple triple)))
 
-(define (s-triples trips)
-  (string-join (map s-triple trips) "\n"))
+(define s-triples write-triples)
 
 ;; x
 (define (triple a b c)
