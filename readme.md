@@ -6,7 +6,7 @@ Chicken Scheme module for reading, writing, and transforming SPARQL queries as s
 
 ## Installation
 
-Clone this repo and run `sudo chicken-install` in the main directory. Requires Chicken Scheme 4.12+ (http://code.call-cc.org/). Then add to your scheme code:
+Clone this repo and run `sudo chicken-install` in the main directory. Requires Chicken Scheme 4.12 (http://code.call-cc.org/). Then add to your scheme code:
 
 ```
 (use s-sparql) 
@@ -17,7 +17,25 @@ Clone this repo and run `sudo chicken-install` in the main directory. Requires C
 
 **s-sparql** use s-expressions to represent SPARQL queries. This allows for easy parsing, transforming, and writing whole queries as well as simple triple groups.
 
-A triple can be represented as a list of subject, predicate, and object: `'(?s ?p ?o)`, of subject, predicate, and objects: `'(?s ?p (?q ?r ?s))`, or of subject and predicates: `(?s ((?p ?o) (?q ?u) (?r (?x ?y))))`. For example:
+A triple can be represented as a list in three ways, as a subject, predicate, and object:
+
+```
+'(?s ?p ?o)
+```
+
+a subject, predicate, and a list of objects:
+
+```
+'(?s ?p (?q ?r ?s))
+```
+
+and a subject and list of predicates:
+
+```
+`(?s ((?p ?o) (?q ?u) (?r (?x ?y))))
+```
+
+For example:
 
 ```
 (define-namespace schema "http://schema.org/")
@@ -172,6 +190,16 @@ Functions for writing queries without using the complete s-sparql format.
 [parameter] (\*default-graph\*)
 
 s-sparql representation of the default graph for queries, e.g., `(\*default-graph* '<http://example.org/application>)`. If this is set, a "WITH <GRAPH>" is added to `s-select`, `s-insert` and `s-delete` expressions.
+
+[procedure] (s-select vars statements #!key with-graph from-graph from-named-graphs)
+
+vars can be a string (`"?s ?p"`), a symbol (`'?s`) or a list (`'(?s ?p ?o)`).
+
+statements can be an RDF string or an s-sparql triples expression.
+
+[procedure] (s-insert statements #!key with-graph)
+
+[procedure] (s-delete statements #!key insert with-graph from-graph from-named-graphs where)
 
 ### Querying SPARQL Endpoints
 
