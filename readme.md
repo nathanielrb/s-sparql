@@ -199,7 +199,7 @@ statements can be an RDF string or an s-sparql triples expression.
 
 [procedure] (s-insert statements #!key with-graph)
 
-[procedure] (s-delete statements #!key insert with-graph from-graph from-named-graphs where)
+[procedure] (s-delete statements #!key insert with-graph from-graph from-named-graphs where
 
 ### Querying SPARQL Endpoints
 
@@ -225,9 +225,11 @@ Returns a list of association lists representing the variable bindings, or in th
 
 (sparql/select-unique "SELECT * WHERE { ?s ?p ?o }")
 
-;; => '((s . "s1") (p . "p1"))
+;; => '((s . "s1@en") (p . 45))
 
 ```
+
+Note that other datatypes (dateTime, typed strings, etc.) are not currently handled, and returned as simple strings. This should change in the future.
 
 [procedure] (sparql/update query #!key additional-headers)
 
