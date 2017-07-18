@@ -229,7 +229,7 @@ Returns a list of association lists representing the variable bindings, or in th
 
 ```
 
-Note that other datatypes (dateTime, typed strings, etc.) are not currently handled, and returned as simple strings. This should change in the future.
+The last example illustrates the handling of integers and language tags. Note that other datatypes (dateTime, typed strings, etc.) are not currently handled, and returned as simple strings. This should change in the future.
 
 [procedure] (sparql/update query #!key additional-headers)
 
