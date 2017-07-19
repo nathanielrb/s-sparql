@@ -1295,15 +1295,34 @@
 ;; Accessors
 
 (define (nested-alist-ref alist #!rest keys)
-  (nested-alist-ref* alist keys))
+  (nested-alist-ref* keys alist))
 
-(define (nested-alist-ref* alist keys)
+(define (nested-alist-ref* keys alist)
   (and keys       
        (if (null? keys)
            alist
            (let ((nested (alist-ref (car keys) alist)))
              (and nested
-                  (nested-alist-ref* nested (cdr keys)))))))
+                  (nested-alist-ref* (cdr keys) nested))))))
+
+(define (nested-alist-update* keys val alist)
+  (let ((key (car keys)))
+    (if (null? (cdr keys))
+        (alist-update key val alist)
+        (alist-update 
+         key
+         (nested-alist-update*
+          (cdr keys) val (or (alist-ref key alist) '()))
+          alist))))
+
+(define (nested-alist-update alist val #!rest keys)
+  (nested-alist-update* keys val alist))
+
+(define (nested-alist-replace* keys proc alist)
+  (nested-alist-update* keys (proc (nested-alist-ref* keys alist)) alist))
+
+(define (nested-alist-replace alist proc #!rest keys)
+  (nested-alist-replace* keys proc alist))
 
 (define (assoc-when sym alist)
   (and alist
