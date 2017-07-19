@@ -327,7 +327,8 @@
                            pre (write-sparql (cadr exp))
                            (write-triple (cddr exp) (+ level 1))))
           ((WHERE MINUS OPTIONAL DELETE INSERT
-                  |DELETE WHERE| |DELETE DATA| |INSERT DATA|)
+                  |DELETE WHERE| |DELETE DATA| |INSERT DATA|
+                  CONSTRUCT)
            (format #f "~A~A ~A" pre (car exp) (write-triple (cdr exp) (+ level 1))))
           ((BIND FILTER) (format #f "~A~A ~A"
                           pre (car exp) (string-join (map write-sparql (cdr exp)) " ")))
