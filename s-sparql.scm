@@ -144,8 +144,9 @@
 
 (define (iri? obj)
   (and (symbol? obj)
-       (not (sparql-variable? obj))
-       (not (a? obj))))
+       (let ((s (symbol->string obj)))
+	 (and (string-prefix? "<" s)
+	      (string-suffix? ">" s)))))
 
 (define (a? obj)
   (equal? 'a obj))
