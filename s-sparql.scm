@@ -319,6 +319,10 @@
                            (string-join
                             (map write-triple-properties (cdr exp)) 
                             " ")))
+          ((SELECT |SELECT DISTINCT| |SELECT REDUCED|)
+           (format #f "~A~A ~A"
+                   pre (car exp)
+                   (string-join (map write-sparql (cdr exp)) " ")))
           ((UNION)     
            (conc pre
                  (string-join  (map (cut write-triple <> (+ level 1)) (cdr exp))
@@ -392,8 +396,8 @@
 (define (expand-special triple)
   (cond ((blank-node-path? (car triple))
          (let ((subject (new-blank-node)))
-            (append (expand-triple (cons subject (cdr triple)))
-                    (expand-triple (cons subject (cdar triple))))))
+           (append (expand-triple (cons subject (cdr triple)))
+                   (expand-triple (cons subject (cdar triple))))))
         ((and (= (length triple) 3)
               (blank-node-path? (caddr triple)))
          (let ((object (new-blank-node)))
@@ -403,6 +407,8 @@
                        (expand-triple (cons object rest)))))))        
         (else
          (case (car triple)
+           ((SELECT |SELECT DISTINCT| |SELECT REDUCED|)
+            triple)
            ((WHERE DELETE INSERT) 
             (cons (car triple) (expand-triples (cdr triple))))
            ((|@[]|)
@@ -416,13 +422,18 @@
            ((FILTER BIND) (list triple))
            (else #f)))))
 
+(define (expand-subselect triple)
+  (and (pair? triple) (pair? (car triple))
+       (member (caar triple) '(SELECT |SELECT DISTINCT| |SELECT REDUCED|))
+       (list (car triple)
+             (expand-triples (cdr triple)))))
+
 (define (expand-sequence-path-triple triple)
   (and (= (length triple) 3)
        (sequence-path? (cadr triple))
        (match triple
          ((s (`/ . ps) o)
-          (let loop ((s s)
-                     (ps ps))
+          (let loop ((s s) (ps ps))
             (if (= (length ps) 1)
                 (expand-triple (list s (car ps) o))
                 (let ((object (new-blank-node)))
@@ -430,7 +441,8 @@
                           (loop object (cdr ps))))))))))
 
 (define (expand-triples triples)
-  (or (expand-special triples)
+  (or (expand-subselect triples)
+      (expand-special triples)
       (join (map expand-triple triples))))
 
 (define (expand-expanded-triple s p o)
@@ -442,7 +454,9 @@
           (list (list s p o)))))
 
 (define (expand-triple triple)
-  (or (expand-special triple)
+  (or ;(expand-subselect triple)
+   (let ((x (expand-subselect triple))) (and x (list x)))
+      (expand-special triple)
       (match triple
         ((subject predicates)
          (let ((subject (car triple)))

@@ -867,13 +867,15 @@
 
 (define GroupOrUnionGraphPattern
   (vac
-   (->alist
-    'UNION
-    (::
-     (->list GroupGraphPattern)
-     (:* (::
-          (drop-consumed (lit/sp "UNION"))
-          (->list GroupGraphPattern)))))))
+   (alternatives
+     (->alist
+      'UNION
+      (::
+       (->list GroupGraphPattern)
+       (:+ (::
+            (drop-consumed (lit/sp "UNION"))
+            (->list GroupGraphPattern)))))
+     (->list GroupGraphPattern))))
 
 (define MinusGraphPattern
   (vac
@@ -975,7 +977,7 @@
   (vac
     (:: (drop-consumed (lit/sp "{"))
         (alternatives
-         ;; SubSelect
+         SubSelect
          GroupGraphPatternSub)
         (drop-consumed (lit/sp "}")))))
 
@@ -1228,7 +1230,8 @@
      (lit/sym "*"))))
 
 (define SubSelect
-   (:: SelectClause WhereClause
+   (:: (->list SelectClause)
+       (->list WhereClause)
        ;; SolutionModifier ValuesClause
        ))
 
