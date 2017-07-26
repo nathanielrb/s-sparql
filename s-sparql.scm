@@ -92,6 +92,29 @@
        (or (equal? "?" (substring (->string obj) 0 1))
            (equal? "$" (substring (->string obj) 0 1)))))
 
+(define (triple? expr)
+  (and (pair? expr)
+       (or (iri? (car expr))
+	   (sparql-variable? (car expr))
+	   (blank-node? (car expr)))))
+
+(define (select? expr)
+  (and (pair? expr)
+       (member (car expr)
+	       `(SELECT |SELECT DISTINCT| |SELECT REDUCED|))))
+
+(define (subselect? expr)
+  (and (pair? expr)
+       (select? (car expr))))
+
+(define (quads-block? expr)
+  (member (car expr)
+	  '(WHERE
+	    DELETE |DELETE WHERE| |DELETE DATA|
+	    INSERT |INSERT WHERE| |INSERT DATA|
+	    MINUS OPTIONAL UNION GRAPH)))
+
+
 (define (blank-node? obj)
   (and (symbol? obj)
        (or (equal? "_:" (substring (->string obj) 0 2))
@@ -145,8 +168,9 @@
 (define (iri? obj)
   (and (symbol? obj)
        (let ((s (symbol->string obj)))
-	 (and (string-prefix? "<" s)
-	      (string-suffix? ">" s)))))
+         (or (and (string-prefix? "<" s)
+                  (string-suffix? ">" s))
+             (= (length (string-split s ":")) 2)))))
 
 (define (a? obj)
   (equal? 'a obj))
@@ -371,19 +395,19 @@
                  "."))))))
 
 (define (write-triple-properties exp)
-  (if (pair? exp)
-      (string-join (map (lambda (property)
-                          (format #f "~A ~A"
-                                  (write-sparql (car property))
-                                  (write-triple-objects (cadr property))))
-                        exp)
-                   ";  ")
-      (write-sparql exp)))
+  (or (write-sparql-path exp)                         
+      (if (pair? exp)
+          (string-join (map (lambda (property)
+                              (format #f "~A ~A"
+                                      (write-triple-properties (car property))
+                                      (write-triple-objects (cadr property))))
+                            exp)
+                       ";  ")
+          (write-sparql exp))))
 
 (define (write-triple-objects exp)
   (if (pair? exp)
       (or (write-sparql-literal exp)
-          (write-sparql-path exp)                         
 	  (write-sparql-special exp)
           (string-join (map (lambda (y) (write-sparql y)) exp) ", "))
       (write-sparql exp)))
