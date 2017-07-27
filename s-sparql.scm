@@ -107,13 +107,16 @@
   (and (pair? expr)
        (select? (car expr))))
 
+(define (where-subselect? block)
+  (and (equal? (car block) 'WHERE)
+       (subselect? (cdr block))))
+
 (define (quads-block? expr)
   (member (car expr)
 	  '(WHERE
 	    DELETE |DELETE WHERE| |DELETE DATA|
 	    INSERT |INSERT WHERE| |INSERT DATA|
 	    MINUS OPTIONAL UNION GRAPH)))
-
 
 (define (blank-node? obj)
   (and (symbol? obj)
