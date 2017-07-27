@@ -657,7 +657,8 @@
           (let ((datatype (alist-ref 'datatype bindings)))
             (case datatype
               (("http://www.w3.org/2001/XMLSchema#integer")
-               (cons var (string->number value))))))
+               (cons var (string->number value)))
+              (else (cons var value)))))
          ("uri"
           (cons var (read-uri (alist-ref 'value bindings))))
          (else (cons var value)))))))
