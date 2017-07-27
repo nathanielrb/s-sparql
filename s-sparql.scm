@@ -1,7 +1,7 @@
 (module s-sparql *
 (import chicken scheme extras data-structures srfi-1) 
 
-(use srfi-13 srfi-69 http-client intarweb uri-common medea matchable irregex)
+(use srfi-13 srfi-69 http-client intarweb uri-common medea cjson matchable irregex)
 
 (require-extension srfi-13)
 
@@ -637,32 +637,37 @@
                                                     '((Content-Type application/x-www-form-urlencoded)
                                                       (Accept application/json)))))
 		   `((query . ,(add-prefixes query)))
-                   read-json)))
+                   read-string)))
       (close-connection! uri)
-      (if raw? result (unpack-bindings result)))))
+      (if raw? result (unpack-bindings (string->json result))))))
 
 (define sparql-binding
   (match-lambda
-    [(var (`type . "uri") . rest)
-     (cons var (read-uri (alist-ref 'value rest)))]
-    [(var (`type . "literal") . rest)
-     (let ((lang (alist-ref 'xml:lang rest))
-	   (value (alist-ref 'value rest)))
-       (cons var (if lang (conc value "@" lang) value)))]
-    [(var (`type . "typed-literal") . rest)
-     (let ((datatype (alist-ref 'datatype rest))
-	   (value (alist-ref 'value rest)))
-       (match datatype
-	 ("http://www.w3.org/2001/XMLSchema#integer"
-	  (cons var (string->number value)))
-	 (_ (cons var value))))]))
+    ((var . bindings)
+     (let ((value (alist-ref 'value bindings))
+           (type (alist-ref 'type bindings)))
+       (match type
+         ("literal"
+          (let ((lang (alist-ref 'xml:lang bindings)))
+            (cons var
+                  (if lang
+                      (conc value "@" lang) 
+                      value))))
+         ("typed-literal"
+          (let ((datatype (alist-ref 'datatype bindings)))
+            (case datatype
+              (("http://www.w3.org/2001/XMLSchema#integer")
+               (cons var (string->number value))))))
+         ("uri"
+          (cons var (read-uri (alist-ref 'value bindings))))
+         (else (cons var value)))))))
 
 (define (unpack-bindings results)
   (map (lambda (binding)
 	 (map sparql-binding binding))
-	  (vector->list
-	   (alist-ref 'bindings
-                      (alist-ref 'results results)))))
+       (vector->list
+        (alist-ref 'bindings
+                   (alist-ref 'results results)))))
 
 (define-syntax with-bindings
   (syntax-rules ()
