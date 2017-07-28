@@ -18,26 +18,13 @@
   (make-parameter
    "http://127.0.0.1:8890/sparql"))
 
+(define *sparql-update-endpoint*
+  (make-parameter
+   "http://127.0.0.1:8890/sparql"))
+
 (define *print-queries?* (make-parameter #t))
 
 (define *namespaces* (make-parameter '()))
-
-(define-syntax hit-property-cache
-  (syntax-rules ()
-    ((hit-property-cache sym prop body)
-     (or (get sym prop)
-         (put! sym prop body)))))
-
-(define-syntax hit-hashed-cache
-  (syntax-rules ()
-    ((hit-hashed-cache cache key body)
-     (or (hash-table-ref/default cache key #f)
-         (begin
-           (hash-table-set! cache key body)
-           (hash-table-ref cache key))))))
-    
-(define (clear-hashed-cache! cache key)
-  (hash-table-delete! cache key))
 
 (define *expand-namespaces?* (make-parameter #t))
 
@@ -239,6 +226,18 @@
        (define (name elt)
          (read-uri (conc namespace elt)))))))
 
+(define (expand-namespace-prefixes namespaces)
+  (apply conc
+	 (map (lambda (ns)
+		(format #f "PREFIX ~A: <~A>~%"
+			(car ns) (cadr ns)))
+	      namespaces)))
+
+(define (add-prefixes query)
+  (format #f "~A~%~A"
+	  (expand-namespace-prefixes (*namespaces*))
+	  query))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Writing Sparql
 
@@ -249,6 +248,15 @@
 (define (rdf->json exp)
   (cond ((symbol? exp) (write-uri exp))
 	(else exp)))
+
+(define (value exp)
+  (cond ((symbol? exp)
+         (let ((s (symbol->string exp)))
+           (if (string-contains s "://")
+               (substring s 1 (- (string-length s) 1))
+               s)))
+        ((typed-or-langtag-literal? exp) (car exp))
+        (else exp)))
 
 (define (write-sparql exp #!optional (level 0))
   (cond ((string? exp) (conc "\"" exp "\""))
@@ -592,22 +600,10 @@
                 from-named-graphs))
           (format #f "WHERE {~% ~A ~%}~%" where))))
 
-(define (expand-namespace-prefixes namespaces)
-  (apply conc
-	 (map (lambda (ns)
-		(format #f "PREFIX ~A: <~A>~%"
-			(car ns) (cadr ns)))
-	      namespaces)))
-
-(define (add-prefixes query)
-  (format #f "~A~%~A"
-	  (expand-namespace-prefixes (*namespaces*))
-	  query))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; SPARQL Endpoint
 
-(define (sparql/update query #!key (additional-headers '()))
+(define (sparql-update* query #!key (additional-headers '()))
   (let ((endpoint (*sparql-endpoint*)))
     (when (*print-queries?*)
       (format (current-error-port) "~%~%==Executing Query==~%~%~A" (add-prefixes query)))
@@ -624,10 +620,13 @@
       (close-connection! uri)
       result)))
 
-(define (sparql/select-unique query #!optional raw?)
-  (car-when (sparql/select query raw?)))
+(define (sparql-update query #!rest args)
+  (sparql-update*
+   (apply format #f query args)))
 
-(define (sparql/select query #!optional raw? #!key (additional-headers '()))
+(define sparql/update sparql-update)
+
+(define (sparql-select* query #!optional raw? #!key (additional-headers '()))
   (let ((endpoint (*sparql-endpoint*)))
     (when (*print-queries?*)
 	  (format (current-error-port) "~%==Executing Query==~%~A~%" (add-prefixes query)))
@@ -643,6 +642,18 @@
                    read-string)))
       (close-connection! uri)
       (if raw? result (unpack-bindings (string->json result))))))
+
+(define (sparql-select query #!rest args)
+  (sparql-select*
+   (apply format #f query args)))
+
+;; for backward compatibility
+(define sparql/select sparql-select*)
+
+(define (sparql-select-unique query #!optional raw?)
+  (car-when (sparql-select query raw?)))
+
+(define sparql/select-unique sparql-select-unique)
 
 (define sparql-binding
   (match-lambda
@@ -684,7 +695,14 @@
     ((query-with-vars (vars ...) query form)
      (map (lambda (bindings)
             (with-bindings (vars ...) bindings form))
-	  (sparql/select query)))))
+	  (sparql-select* query)))))
+
+(define-syntax select-with-vars
+  (syntax-rules ()
+    ((_ (vars ...) (query args ...) form)
+     (map (lambda (bindings)
+            (with-bindings (vars ...) bindings form))
+	  (sparql-select* (format #f query args ...))))))
 
 (define-syntax query-unique-with-vars
   (syntax-rules ()
