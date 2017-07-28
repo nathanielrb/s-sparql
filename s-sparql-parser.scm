@@ -972,7 +972,7 @@
     (:? TriplesBlock)
      (:*
       (:: GraphPatternNotTriples
-          (:? (lit/sp "."))
+          (:? (drop-consumed (lit/sp ".")))
           (:? TriplesBlock)))))
 
 (define GroupGraphPattern 
