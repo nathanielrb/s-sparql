@@ -340,8 +340,10 @@
 
 (define BooleanLiteral
    (alternatives
-    (lit/sp "true")
-    (lit/sp "false")))
+    (bind (lambda (s) (list #t))
+          (lit/sp "true"))
+    (bind (lambda (s) (list #f))
+          (lit/sp "false"))))
 
 (define NumericLiteralUnsigned
   (alternatives INTEGER DECIMAL)) ;; DOUBLE
