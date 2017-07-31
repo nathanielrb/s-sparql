@@ -3,7 +3,7 @@
 
 (use srfi-13 srfi-69 http-client intarweb uri-common medea cjson matchable irregex)
 
-(require-extension srfi-13)
+;; (require-extension srfi-13)
 
 (define (read-uri uri)
   (and (string? uri)
@@ -30,41 +30,25 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utilities
-
-(define (sconc #!rest syms)
-  (string->symbol 
-   (apply conc (map ->string syms))))
-
-(define (last-substr? str substr)
-  (substring=? str substr
-	       (- (string-length str)
-		  (string-length substr))))
-
-(define (conc-last str substr)
-  (if (last-substr? str substr)
-      str
-      (conc str substr)))
+(define (car-when p)
+  (and (pair? p) (car p)))
 
 (define (cdr-when p)
   (and (pair? p) (cdr p)))
-
-(define (car-when p)
-  (and (pair? p) (car p)))
 
 (define (cons-when exp p)
   (if exp (cons exp p) p))
 
 ;; (define-syntax splice-when
 ;;   (syntax-rules ()
-;;     ((splice-when body)
-;;      (let ((body-val body))
+;;     ((splice-when body ...)
+;;      (let ((body-val (and body ...)))
 ;;        (splice-when body-val body-val)))
-;;     ((splice-when test body)
-;;      (if (or (not test) (null? test)) '() body))))
+;;     ((splice-when test ... body)
+;;      (if (not (and test)) '() body))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; data types
-
+;; Data types
 (define (new-sparql-variable #!optional (prefix "v"))
   (string->symbol (conc "?" (->string (gensym prefix)))))
 
@@ -194,7 +178,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Namespaces 
-
 (define (register-namespace name namespace)
   (*namespaces* (cons (list name namespace) (*namespaces*))))
 
@@ -240,7 +223,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Writing Sparql
-
 (define (write-uri uri)
   (let ((str (symbol->string uri)))
     (substring str 1 (- (string-length str) 1))))
@@ -308,7 +290,6 @@
    (write-sparql-inverse-element exp)
    (write-sparql-negated-set exp)
    (write-sparql-alternative-path exp)))
-
 
 (define functions '(COUNT SUM MIN MAX AVG SAMPLE STR LANG LANGMATCHES 
                           DATATYPE BOUND IRI URI BNODE RAND NIL ABS CEIL FLOOR ROUND IF
@@ -386,11 +367,9 @@
           (let ((pre (apply conc (make-list level " "))))
              ;; list of triples
             (if (pair? (car triple))
-                ;; (if (= (length triple) 1)
-                ;;     (format #f "{ ~A }"
-                ;;         (write-triple (car triple) (+ level 1)))
                 (format #f "{~%~A~%~A}"
-                        (string-join (map (cut write-triple <> (+ level 1)) triple) "\n")
+                        (string-join 
+                         (map (cut write-triple <> (+ level 1)) triple) "\n")
                         pre)
                 (conc
                  pre
@@ -406,15 +385,14 @@
                  "."))))))
 
 (define (write-triple-properties exp)
+  (let ((W (lambda (property)
+             (format #f "~A ~A"
+                     (write-triple-properties (car property))
+                     (write-triple-objects (cadr property))))))
   (or (write-sparql-path exp)                         
       (if (pair? exp)
-          (string-join (map (lambda (property)
-                              (format #f "~A ~A"
-                                      (write-triple-properties (car property))
-                                      (write-triple-objects (cadr property))))
-                            exp)
-                       ";  ")
-          (write-sparql exp))))
+          (string-join (map W exp) ";  ")
+          (write-sparql exp)))))
 
 (define (write-triple-objects exp)
   (if (pair? exp)
@@ -428,110 +406,100 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Expand RDF triples
+;; (define (expand-special triple)
+;;   (cond ((blank-node-path? (car triple))
+;;          (let ((subject (new-blank-node)))
+;;            (append (expand-triple (cons subject (cdr triple)))
+;;                    (expand-triple (cons subject (cdar triple))))))
+;;         ((and (= (length triple) 3)
+;;               (blank-node-path? (caddr triple)))
+;;          (let ((object (new-blank-node)))
+;;            (match triple
+;;              ((s p (_ . rest))
+;;                (append (expand-triple (list s p object))
+;;                        (expand-triple (cons object rest)))))))        
+;;         (else
+;;          (case (car triple)
+;;            ((SELECT |SELECT DISTINCT| |SELECT REDUCED|)
+;;             triple)
+;;            ((WHERE DELETE INSERT) 
+;;             (cons (car triple) (expand-triples (cdr triple))))
+;;            ((|@[]|)
+;;             (expand-triple (cons (new-blank-node) (cdr triple))))
+;;            ((|@()| MINUS OPTIONAL)
+;;             (list (cons (car triple) (expand-triples (cdr triple)))))
+;;            ((UNION)
+;;             (list (cons (car triple) (map expand-triples (cdr triple)))))
+;;            ((GRAPH) (list (append (take triple 2)
+;;                                   (expand-triples (cddr triple)))))
+;;            ((FILTER BIND) (list triple))
+;;            (else #f)))))
 
-(define (expand-special triple)
-  (cond ((blank-node-path? (car triple))
-         (let ((subject (new-blank-node)))
-           (append (expand-triple (cons subject (cdr triple)))
-                   (expand-triple (cons subject (cdar triple))))))
-        ((and (= (length triple) 3)
-              (blank-node-path? (caddr triple)))
-         (let ((object (new-blank-node)))
-           (match triple
-             ((s p (_ . rest))
-               (append (expand-triple (list s p object))
-                       (expand-triple (cons object rest)))))))        
-        (else
-         (case (car triple)
-           ((SELECT |SELECT DISTINCT| |SELECT REDUCED|)
-            triple)
-           ((WHERE DELETE INSERT) 
-            (cons (car triple) (expand-triples (cdr triple))))
-           ((|@[]|)
-            (expand-triple (cons (new-blank-node) (cdr triple))))
-           ((|@()| MINUS OPTIONAL)
-            (list (cons (car triple) (expand-triples (cdr triple)))))
-           ((UNION)
-            (list (cons (car triple) (map expand-triples (cdr triple)))))
-           ((GRAPH) (list (append (take triple 2)
-                                  (expand-triples (cddr triple)))))
-           ((FILTER BIND) (list triple))
-           (else #f)))))
+;; (define (expand-subselect triple)
+;;   (and (pair? triple) (pair? (car triple))
+;;        (member (caar triple) '(SELECT |SELECT DISTINCT| |SELECT REDUCED|))
+;;        (list (car triple)
+;;              (expand-triples (cdr triple)))))
 
-(define (expand-subselect triple)
-  (and (pair? triple) (pair? (car triple))
-       (member (caar triple) '(SELECT |SELECT DISTINCT| |SELECT REDUCED|))
-       (list (car triple)
-             (expand-triples (cdr triple)))))
+;; (define (expand-sequence-path-triple triple)
+;;   (and (= (length triple) 3)
+;;        (sequence-path? (cadr triple))
+;;        (match triple
+;;          ((s (`/ . ps) o)
+;;           (let loop ((s s) (ps ps))
+;;             (if (= (length ps) 1)
+;;                 (expand-triple (list s (car ps) o))
+;;                 (let ((object (new-blank-node)))
+;;                   (append (expand-triple (list s (car ps) object))
+;;                           (loop object (cdr ps))))))))))
 
-(define (expand-sequence-path-triple triple)
-  (and (= (length triple) 3)
-       (sequence-path? (cadr triple))
-       (match triple
-         ((s (`/ . ps) o)
-          (let loop ((s s) (ps ps))
-            (if (= (length ps) 1)
-                (expand-triple (list s (car ps) o))
-                (let ((object (new-blank-node)))
-                  (append (expand-triple (list s (car ps) object))
-                          (loop object (cdr ps))))))))))
+;; (define (expand-triples triples)
+;;   (or (expand-subselect triples)
+;;       (expand-special triples)
+;;       (join (map expand-triple triples))))
 
-(define (expand-triples triples)
-  (or (expand-subselect triples)
-      (expand-special triples)
-      (join (map expand-triple triples))))
+;; (define (expand-expanded-triple s p o)
+;;   (cond  ((blank-node-path? o)
+;;           (expand-special (list s p o)))
+;;          ((sequence-path? p)
+;;           (expand-sequence-path-triple (list s p o)))
+;;          (else
+;;           (list (list s p o)))))
 
-(define (expand-expanded-triple s p o)
-  (cond  ((blank-node-path? o)
-          (expand-special (list s p o)))
-         ((sequence-path? p)
-          (expand-sequence-path-triple (list s p o)))
-         (else
-          (list (list s p o)))))
-
-(define (expand-triple triple)
-  (or ;(expand-subselect triple)
-   (let ((x (expand-subselect triple))) (and x (list x)))
-      (expand-special triple)
-      (match triple
-        ((subject predicates)
-         (let ((subject (car triple)))
-           (join
-            (map (lambda (po-list)
-                   (let ((predicate (car po-list))
-                         (object (cadr po-list)))
-                     (if (and (list? object) (not (blank-node-path? object)))
-                         (join
-                          (map (lambda (object)
-                                 (expand-expanded-triple subject predicate object))
-                               (cadr po-list)))
-                         (expand-expanded-triple subject predicate object))))
-                 predicates))))
-        ((subject predicate objects)
-         (if (list? objects)
-             (join
-              (map (lambda (object)
-                     (expand-expanded-triple subject predicate object))
-                   objects))
-             (expand-expanded-triple subject predicate objects))))))
+;; (define (expand-triple triple)
+;;   (or ;(expand-subselect triple)
+;;    (let ((x (expand-subselect triple))) (and x (list x)))
+;;       (expand-special triple)
+;;       (match triple
+;;         ((subject predicates)
+;;          (let ((subject (car triple)))
+;;            (join
+;;             (map (lambda (po-list)
+;;                    (let ((predicate (car po-list))
+;;                          (object (cadr po-list)))
+;;                      (if (and (list? object) (not (blank-node-path? object)))
+;;                          (join
+;;                           (map (lambda (object)
+;;                                  (expand-expanded-triple subject predicate object))
+;;                                (cadr po-list)))
+;;                          (expand-expanded-triple subject predicate object))))
+;;                  predicates))))
+;;         ((subject predicate objects)
+;;          (if (list? objects)
+;;              (join
+;;               (map (lambda (object)
+;;                      (expand-expanded-triple subject predicate object))
+;;                    objects))
+;;              (expand-expanded-triple subject predicate objects))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Convenience Functions
-
 (define (s-triple triple)
   (if (string? triple)
       triple
       (write-triple triple)))
 
 (define s-triples write-triples)
-
-;; x
-(define (triple a b c)
-  (s-triple (list a b c)))
-
-;; x
-(define (triples trips)
-  (string-join trips "\n"))
 
 (define (s-bracketed statement)
   (format #f "{ ~A }" statement))         
@@ -601,8 +569,7 @@
           (format #f "WHERE {~% ~A ~%}~%" where))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; SPARQL Endpoint
-
+;; Querying SPARQL Endpoints
 (define (sparql-update* query #!key (additional-headers '()))
   (let ((endpoint (*sparql-endpoint*)))
     (when (*print-queries?*)
@@ -710,8 +677,7 @@
      (car-when (query-with-vars (vars ...) query form)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Startup
-
+;; Default definitions
 (define-namespace foaf "http://xmlns.com/foaf/0.1/")
 (define-namespace dc "http://purl.org/dc/elements/1.1/")
 (define-namespace rdf "http://www.w3.org/1999/02/22-rdf-syntax-ns#")

@@ -1333,13 +1333,6 @@
   (and alist
       (assoc sym alist)))
 
-(define (unit-prologue QueryUnit)
-  ;;(nested-alist-ref QueryUnit '@Unit '@Prologue))
-  (join
-   (map (lambda (unit)
-          (alist-ref '@Prologue unit))
-        (alist-ref '@Unit QueryUnit))))
-
 (define (unit-query QueryUnit)
   (nested-alist-ref QueryUnit '@Unit '@Query))
 
