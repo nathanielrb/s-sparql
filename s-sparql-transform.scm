@@ -1,7 +1,6 @@
-(module s-sparql-transform *
-(import chicken scheme extras data-structures srfi-1) 
-
-(use matchable s-sparql)
+;;(module s-sparql-transform *
+;;(import chicken scheme extras data-structures srfi-1) 
+;; (use matchable s-sparql)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Expand triples
@@ -103,7 +102,7 @@
 
 (define *context* (make-parameter empty-context))
 
-(define (->parent-context context)
+(define (make-parent-context context)
   (if (not context) empty-context
       (make-context (and (context-head context) (car (context-head context)))
                     (context-previous context)
@@ -124,48 +123,84 @@
                (context-next parent)
                (context-parent parent))))))
 
-;; also (context-child n), (context-child filter-proc)
-(define (context-children context #!optional (filtr values))
-  (let ((parent (make-context (car (context-head context))
-                              (context-previous context)
-                              (context-next context)
-                              (context-parent context))))
-    (let loop ((cc '()) (prevc '()) (nextc (cdr (context-head context))))
-      (if (null? nextc) (filter filtr (reverse cc))
+(define (previous-sibling context)
+  (and (pair? (context-next context))
+       (make-context (car (context-previous context))
+                     (cons (context-head context)
+                           (context-next context))
+                     (cdr (context-previous context))
+                     (context-parent context))))
+
+(define (next-sibling context)
+  (and (pair? (context-next context))
+       (make-context (car (context-next context))
+                     (cdr (context-next context))
+                     (cons (context-head context)
+                           (context-previous context))
+                     (context-parent context))))
+
+(define (context-children context #!optional filtr)
+  (let ((parent (make-parent-context context)))
+    (let loop ((count 0) (cc '()) (prevc '()) (nextc (cdr (context-head context))))
+      (if (null? nextc) 
+          (if (number? filtr) (car cc) (reverse cc)) ;; do with call/cc
           (let ((child (car nextc)))
-            (loop (cons (make-context child prevc (cdr nextc) parent) cc)
-                  (cons child prevc)
-                  (cdr nextc)))))))
+            (if (or (not filtr) 
+                    (and (procedure? filtr) (filtr child))
+                    (and (number? filtr) (= count filtr)))
+                (loop (+ count 1)
+                      (cons (make-context child prevc (cdr nextc) parent) cc)
+                      (cons child prevc)
+                      (cdr nextc))
+                (loop (+ count 1) cc prevc (cdr nextc))))))))
 
-(define (parent-axis proc)
-  (lambda (context)
-    (call/cc
-     (lambda (out)
-       (let loop ((context context))
-         (if (not context) (out #f)
-             (let ((try (proc context)))
-               (if try (out try)
-                   (loop (parent-context context))))))))))
+;; (define (parent-axis proc)
+;;   (lambda (context)
+;;     (call/cc
+;;      (lambda (out)
+;;        (let loop ((context context))
+;;          (if (not context) (out #f)
+;;              (let ((try (proc context)))
+;;                (if try (out try)
+;;                    (loop (parent-context context))))))))))
 
-(define (axis next)
+;;      (call/cc
+;;       (lambda (out)
+
+;; children/descendants and ancestors needs to be thought through better
+(define (axis next #!optional recursive?)
   (lambda (proc)
     (lambda (context)
-      (call/cc
-       (lambda (out)
-         (let loop ((context context))
-           (if (not (context? context)) #f
+      (let loop ((context context))
+        (cond ((pair? context) 
+               (map loop context))
+              ((context? context)
                (let ((try (proc context)))
-                 (if try (out #t)
-                     (loop (next context)))))))))))
+                 (if try context
+                     (loop (next context)))))
+              (else #f))))))
+
+(define (head? label)
+  (lambda (context) 
+    (let ((head (context-head context)))
+      (and head (equal? (car head) label)))))
 
 (define parent-axis (axis parent-context))
 
-;; (define child-axis (axis context-children))
+(define ancestors-axis (axis parent-context))
 
-;; (define next-sibling-axis (axis 
+(define children-axis (axis context-children))
+
+(define descendants-axis (axis context-children))
+
+(define next-sibling-axis (axis next-sibling))
+
+(define previous-sibling-axis (axis previous-sibling))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Bindings
+(define *rules* (make-parameter '()))
+
 (define default-rules (make-parameter (lambda () '())))
 
 (define (nested-alist-replace* keys proc alist)
@@ -189,6 +224,18 @@
 
 (define (update-binding* vars key val bindings)
   (nested-alist-update* (append vars (list '@bindings key)) val bindings))
+
+(define (update-bindings* vkvs bindings)
+  (if (null? vkvs) bindings
+      (match (car vkvs)
+        ((vars key val)
+         (update-binding* vars key val
+                         (update-bindings* (cdr vkvs) bindings))))))
+
+(define-syntax update-bindings
+  (syntax-rules ()
+    ((_ (var ... key val) ... bindings)
+     (update-bindings* (list (list (list var ...) key val) ...) bindings))))
 
 (define-syntax update-binding
   (syntax-rules ()
@@ -239,7 +286,8 @@
   (and (list? quad)
        (equal? (car quad) 'GRAPH)))
 
-(define (unit-prologue QueryUnit)
+;; this isn't quite legal, but Virtuoso does it...
+(define (all-prologues QueryUnit)
   (join
    (map (lambda (unit)
           (alist-ref '@Prologue unit))
@@ -248,28 +296,32 @@
 (define (query-prefixes QueryUnit)
   (map (lambda (decl)
          (list (remove-trailing-char (cadr decl)) (write-uri (caddr decl))))
-       (filter PrefixDecl? (unit-prologue QueryUnit))))
+       (filter PrefixDecl? (all-prologues QueryUnit))))
 
 (define (rewrite-query Query #!optional (rules ((default-rules))))
-  (parameterize ((query-namespaces (query-prefixes Query)))
-    (rewrite Query rules)))
+  (parameterize ((query-namespaces (query-prefixes Query))
+                 (*rules* rules))
+    (rewrite Query '() rules)))
 
-(define (rewrite blocks #!optional (rules ((default-rules))) (bindings '()) (appendr append))
-  (let loop ((blocks blocks) (statements '()) (bindings bindings) (left-blocks '()))
+(define (rewrite* blocks bindings rules kappend knil)
+  (let loop ((blocks blocks) (statements knil) (bindings bindings) (visited-blocks '()))
     (if (null? blocks)
 	(values statements bindings)
 	(let-values (((new-statements updated-bindings)
-		      (apply-rules (car blocks) rules bindings
+		      (apply-rules (car blocks) bindings rules
                                    (make-context
-                                    (car blocks) left-blocks
+                                    (car blocks) visited-blocks
                                     (cdr blocks) 
-                                    (->parent-context (*context*))))))
+                                    (make-parent-context (*context*))))))
 	  (loop (cdr blocks)
-		(appendr statements new-statements)
+		(kappend statements new-statements)
 		updated-bindings
-                (cons (car blocks) left-blocks))))))
+                (cons (car blocks) visited-blocks))))))
 
-(define (apply-rules block rules bindings context)
+(define (rewrite blocks #!optional (bindings '()) (rules (*rules*)))
+  (rewrite* blocks bindings rules append '()))
+
+(define (apply-rules block bindings rules context)
   (let ((rule-match? (lambda (rule)
                        (or (and (symbol? rule) (equal? rule block))
                            (and (pair? rule) (member (car block) rule))
@@ -279,19 +331,20 @@
           (match (car remaining-rules)
             ((rule . proc) 
              (if (rule-match? rule)
-                 (parameterize ((*context* context))
-                   (proc block rules bindings))
+                 (parameterize ((*context* context)
+                                (*rules* rules))
+                   (proc block bindings))
                  (loop (cdr remaining-rules)))))))))
 
-;; macros for when the bindings don't matter
-;; limited support for second-passes using the same rules and context,
+;; Macros for when the bindings don't matter, and should just be passed through.
+;; Limited support for second-passes using the same rules and context,
 ;; but it'd be nice if this playing-nice with with-rewrite could be more general.
 ;; (rw/lambda (block)
 ;;  (with-rewrite ((rw (rewrite block)))
 ;;    body)) 
 ;; =>
-;; (lambda (block rules bindings)
-;;  (let-values (((rw new-bindings) (rewrite exp rules bindings)))
+;; (lambda (block bindings)
+;;  (let-values (((rw new-bindings) (rewrite exp bindings)))
 ;;    (values body new-bindings))))
 (define-syntax with-rewrite
   (syntax-rules ()
@@ -302,22 +355,21 @@
 (define-syntax rw/lambda
   (syntax-rules (with-rewrite rewrite)
     ((_ (var) (with-rewrite ((rw (rewrite exp))) body))
-     (lambda (var rules bindings)
-       (let-values (((rw new-bindings) (rewrite exp rules bindings)))
+     (lambda (var bindings)
+       (let-values (((rw new-bindings) (rewrite exp bindings)))
          (values body new-bindings))))
     ((_ (var) body)
-     (lambda (var rules bindings)
+     (lambda (var bindings)
        (values body bindings)))))
 
-(define (rw/continue block rules bindings)
-  (with-rewrite ((new-statements (rewrite (cdr block) rules bindings)))
-                `((,(car block) ,@new-statements))))
+(define (rw/continue block bindings)
+  (with-rewrite ((new-statements (rewrite (cdr block) bindings)))
+    `((,(car block) ,@new-statements))))
 
-(define (rw/copy block rules bindings)
+(define (rw/copy block bindings)
   (values (list block) bindings))
 
-(define (rw/remove block rules bindings)
+(define (rw/remove block bindings)
   (values (list) bindings))
 
-
-)
+;;)

@@ -3,8 +3,6 @@
 
 (use srfi-13 srfi-69 http-client intarweb uri-common medea cjson matchable irregex)
 
-;; (require-extension srfi-13)
-
 (define (read-uri uri)
   (and (string? uri)
        (if (string-contains uri "://") ;; a bit hacky
@@ -240,25 +238,13 @@
         ((typed-or-langtag-literal? exp) (car exp))
         (else exp)))
 
-(define (write-sparql exp #!optional (level 0))
-  (cond ((string? exp) (conc "\"" exp "\""))
-        ((keyword? exp) (keyword->string exp))
-        ((number? exp) (number->string exp))
-        ((symbol? exp) (symbol->string exp))
-        ((boolean? exp) (if exp "true" "false"))
-        ((pair? exp) (or (write-sparql-literal exp)
-                         (write-sparql-path exp)                         
-                         (write-sparql-special exp)
-                         (string-join (map (cut write-sparql <> (+ level 1))
-                                           exp)
-                                      " ")))))
-
-(define (write-sparql-literal exp)
+(define (write-sparql-typed-literal exp)
   (and (typed-or-langtag-literal? exp) 
        (if (langtag? (cdr exp))
            (format #f "\"~A\"~A" (car exp) (cdr exp))
            (format #f "\"~A\"^^~A" (car exp) (cdr exp)))))
 
+;; replace write-sparql with write-sparql-element
 (define (write-sparql-inverse-element exp)
   (and (inverse-element? exp)
        (format #f "~A~A" (car exp) (write-sparql (cadr exp)))))
@@ -290,6 +276,29 @@
    (write-sparql-inverse-element exp)
    (write-sparql-negated-set exp)
    (write-sparql-alternative-path exp)))
+
+(define (write-sparql-element exp)
+  (cond ((string? exp) (conc "\"" exp "\""))
+        ((keyword? exp) (keyword->string exp))
+        ((number? exp) (number->string exp))
+        ((symbol? exp) (symbol->string exp))
+        ((boolean? exp) (if exp "true" "false"))
+        ((pair? exp) (or (write-sparql-typed-literal exp)
+                         (write-sparql-path exp)))))
+
+(define (write-sparql exp #!optional (level 0))
+  ;; (cond ((string? exp) (conc "\"" exp "\""))
+  ;;       ((keyword? exp) (keyword->string exp))
+  ;;       ((number? exp) (number->string exp))
+  ;;       ((symbol? exp) (symbol->string exp))
+  ;;       ((boolean? exp) (if exp "true" "false"))
+  ;;       ((pair? exp)
+         (or (write-sparql-element exp)
+             (write-sparql-special exp)
+             (string-join (map (cut write-sparql <> (+ level 1))
+                               exp)
+                          " ")))
+
 
 (define functions '(COUNT SUM MIN MAX AVG SAMPLE STR LANG LANGMATCHES 
                           DATATYPE BOUND IRI URI BNODE RAND NIL ABS CEIL FLOOR ROUND IF
@@ -396,7 +405,7 @@
 
 (define (write-triple-objects exp)
   (if (pair? exp)
-      (or (write-sparql-literal exp)
+      (or (write-sparql-typed-literal exp)
 	  (write-sparql-special exp)
           (string-join (map (lambda (y) (write-sparql y)) exp) ", "))
       (write-sparql exp)))
@@ -568,113 +577,7 @@
                 from-named-graphs))
           (format #f "WHERE {~% ~A ~%}~%" where))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Querying SPARQL Endpoints
-(define (sparql-update* query #!key (additional-headers '()))
-  (let ((endpoint (*sparql-endpoint*)))
-    (when (*print-queries?*)
-      (format (current-error-port) "~%~%==Executing Query==~%~%~A" (add-prefixes query)))
-    (let-values (((result uri response)
-		  (with-input-from-request 
-		   (make-request method: 'POST
-				 uri: (uri-reference endpoint)
-				 headers: (headers (append
-                                                    additional-headers
-                                                    '((content-type application/sparql-update)
-                                                      (Accept application/json)))))
-		   (add-prefixes query)
-		   read-json)))
-      (close-connection! uri)
-      result)))
 
-(define (sparql-update query #!rest args)
-  (sparql-update*
-   (apply format #f query args)))
-
-(define sparql/update sparql-update)
-
-(define (sparql-select* query #!optional raw? #!key (additional-headers '()))
-  (let ((endpoint (*sparql-endpoint*)))
-    (when (*print-queries?*)
-	  (format (current-error-port) "~%==Executing Query==~%~A~%" (add-prefixes query)))
-    (let-values (((result uri response)
-		  (with-input-from-request 
-		   (make-request method: 'POST
-				 uri: (uri-reference endpoint)
-				 headers: (headers (append
-                                                    additional-headers
-                                                    '((Content-Type application/x-www-form-urlencoded)
-                                                      (Accept application/json)))))
-		   `((query . ,(add-prefixes query)))
-                   read-string)))
-      (close-connection! uri)
-      (if raw? result (unpack-bindings (string->json result))))))
-
-(define (sparql-select query #!rest args)
-  (sparql-select*
-   (apply format #f query args)))
-
-;; for backward compatibility
-(define sparql/select sparql-select*)
-
-(define (sparql-select-unique query #!optional raw?)
-  (car-when (sparql-select query raw?)))
-
-(define sparql/select-unique sparql-select-unique)
-
-(define sparql-binding
-  (match-lambda
-    ((var . bindings)
-     (let ((value (alist-ref 'value bindings))
-           (type (alist-ref 'type bindings)))
-       (match type
-         ("literal"
-          (let ((lang (alist-ref 'xml:lang bindings)))
-            (cons var
-                  (if lang
-                      (conc value "@" lang) 
-                      value))))
-         ("typed-literal"
-          (let ((datatype (alist-ref 'datatype bindings)))
-            (case datatype
-              (("http://www.w3.org/2001/XMLSchema#integer")
-               (cons var (string->number value)))
-              (else (cons var value)))))
-         ("uri"
-          (cons var (read-uri (alist-ref 'value bindings))))
-         (else (cons var value)))))))
-
-(define (unpack-bindings results)
-  (map (lambda (binding)
-	 (map sparql-binding binding))
-       (vector->list
-        (alist-ref 'bindings
-                   (alist-ref 'results results)))))
-
-(define-syntax with-bindings
-  (syntax-rules ()
-    ((with-bindings (vars ...) bindings body ...)
-     (let ((vars (alist-ref (quote vars) bindings)) ...)
-       body ...))))
-
-(define-syntax query-with-vars
-  (syntax-rules ()
-    ((query-with-vars (vars ...) query form)
-     (map (lambda (bindings)
-            (with-bindings (vars ...) bindings form))
-	  (sparql-select* query)))))
-
-(define-syntax select-with-vars
-  (syntax-rules ()
-    ((_ (vars ...) (query args ...) form)
-     (map (lambda (bindings)
-            (with-bindings (vars ...) bindings form))
-	  (sparql-select* (format #f query args ...))))))
-
-(define-syntax query-unique-with-vars
-  (syntax-rules ()
-    ((query-unique-with-vars (vars ...) query form)
-     (car-when (query-with-vars (vars ...) query form)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Default definitions
@@ -684,4 +587,6 @@
 (define-namespace owl "http://www.w3.org/2002/07/owl#")
 (define-namespace skos "http://www.w3.org/2004/02/skos/core#")
 
+(include "s-sparql-query.scm")
+(include "s-sparql-transform.scm")
 )
