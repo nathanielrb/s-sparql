@@ -4,14 +4,17 @@
 (use sparql-query
      srfi-13 srfi-69 http-client intarweb uri-common medea cjson matchable irregex)
 
+(reexport sparql-query)
+
 (define (read-uri uri)
   (and (string? uri)
        (if (string-contains uri "://") ;; a bit hacky
            (string->symbol (conc "<" uri ">"))
            (string->symbol uri))))
 
-(define *default-graph*
-  (make-parameter #f))
+(define (default-graph)
+  (let ((df (*default-graph*)))
+    (and df (read-uri df))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utilities
@@ -519,7 +522,7 @@
 (define (s-bind as var)
   (format #f "BIND ~A as ~A" as var))
 
-(define (s-insert triples #!key (with-graph (*default-graph*)))
+(define (s-insert triples #!key (with-graph (default-graph)))
   (conc (if with-graph (format #f "WITH ~A " with-graph) "")
         (format #f "~%INSERT {~%  ~A ~%}" triples)))
 
@@ -534,7 +537,7 @@
       (->string vars)))
 
 (define (s-select vars statements
-                  #!key with-graph (from-graph (*default-graph*)) 
+                  #!key with-graph (from-graph (default-graph)) 
                   (from-named-graphs '()) order-by)
   (let ((query (if (pair? statements) (string-join statements "\n") statements))
         (order-statement (if order-by
@@ -551,7 +554,7 @@
                   query order-statement))))
 
 (define (s-delete statements
-                  #!key insert with-graph (from-graph (*default-graph*)) 
+                  #!key insert with-graph (from-graph (default-graph)) 
                   (from-named-graphs '()) where)
   (let ((statements (if (pair? statements) (string-join statements "\n") statements)))
     (conc (if with-graph  (format #f "WITH ~A " with-graph) "")
