@@ -1,7 +1,8 @@
 (module s-sparql *
 (import chicken scheme extras data-structures srfi-1) 
 
-(use srfi-13 srfi-69 http-client intarweb uri-common medea cjson matchable irregex)
+(use sparql-query
+     srfi-13 srfi-69 http-client intarweb uri-common medea cjson matchable irregex)
 
 (define (read-uri uri)
   (and (string? uri)
@@ -11,20 +12,6 @@
 
 (define *default-graph*
   (make-parameter #f))
-
-(define *sparql-endpoint*
-  (make-parameter
-   "http://127.0.0.1:8890/sparql"))
-
-(define *sparql-update-endpoint*
-  (make-parameter
-   "http://127.0.0.1:8890/sparql"))
-
-(define *print-queries?* (make-parameter #t))
-
-(define *namespaces* (make-parameter '()))
-
-(define *expand-namespaces?* (make-parameter #t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utilities
@@ -175,12 +162,16 @@
          (string-suffix? ">" s))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Namespaces 
-(define (register-namespace name namespace)
-  (*namespaces* (cons (list name namespace) (*namespaces*))))
+;; Writing Sparql
+(define (write-uri uri)
+  (let ((str (symbol->string uri)))
+    (substring str 1 (- (string-length str) 1))))
 
-(define (lookup-namespace name #!optional (namespaces (*namespaces*)))
-  (car (alist-ref name namespaces)))
+;; leftover?
+(define (write-expand-namespace ns-pair #!optional (namespaces (*namespaces*)))
+  (if (s-iri? ns-pair)
+      (write-uri ns-pair)
+      (expand-namespace* ns-pair namespaces)))
 
 (define (expand-namespace* ns-pair namespaces)
   (let ((pair (string-split (->string ns-pair) ":")))
@@ -194,36 +185,32 @@
       (string->symbol
        (format #f "<~A>" (expand-namespace* ns-pair namespaces)))))               
 
-(define (write-expand-namespace ns-pair #!optional (namespaces (*namespaces*)))
-  (if (s-iri? ns-pair)
-      (write-uri ns-pair)
-      (expand-namespace* ns-pair namespaces)))
+(define sparql-binding
+  (match-lambda
+    ((var . bindings)
+     (let ((value (alist-ref 'value bindings))
+           (type (alist-ref 'type bindings)))
+       (match type
+         ("literal"
+          (let ((lang (alist-ref 'xml:lang bindings)))
+            (cons var
+                  (if lang
+                      (conc value "@" lang) 
+                      value))))
+         ("typed-literal"
+          (let ((datatype (alist-ref 'datatype bindings)))
+            (case datatype
+              (("http://www.w3.org/2001/XMLSchema#integer")
+               (cons var (string->number value)))
+              (else (cons var value)))))
+         ("uri"
+          (cons var (read-uri (alist-ref 'value bindings))))
+         (else (cons var value)))))))
 
-(define-syntax define-namespace
-  (syntax-rules ()
-    ((define-namespace name namespace)
-     (begin
-       (register-namespace (quote name) namespace)
-       (define (name elt)
-         (read-uri (conc namespace elt)))))))
+(define unpack-sparql-bindings
+  (json-unpacker sparql-binding))
 
-(define (expand-namespace-prefixes namespaces)
-  (apply conc
-	 (map (lambda (ns)
-		(format #f "PREFIX ~A: <~A>~%"
-			(car ns) (cadr ns)))
-	      namespaces)))
-
-(define (add-prefixes query)
-  (format #f "~A~%~A"
-	  (expand-namespace-prefixes (*namespaces*))
-	  query))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Writing Sparql
-(define (write-uri uri)
-  (let ((str (symbol->string uri)))
-    (substring str 1 (- (string-length str) 1))))
+(*sparql-query-unpacker* unpack-sparql-bindings)
 
 (define (rdf->json exp)
   (cond ((symbol? exp) (write-uri exp))
@@ -578,15 +565,5 @@
           (format #f "WHERE {~% ~A ~%}~%" where))))
 
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Default definitions
-(define-namespace foaf "http://xmlns.com/foaf/0.1/")
-(define-namespace dc "http://purl.org/dc/elements/1.1/")
-(define-namespace rdf "http://www.w3.org/1999/02/22-rdf-syntax-ns#")
-(define-namespace owl "http://www.w3.org/2002/07/owl#")
-(define-namespace skos "http://www.w3.org/2004/02/skos/core#")
-
-(include "s-sparql-query.scm")
 (include "s-sparql-transform.scm")
 )
