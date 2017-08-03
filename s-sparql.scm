@@ -6,16 +6,6 @@
 
 (reexport sparql-query)
 
-(define (read-uri uri)
-  (and (string? uri)
-       (if (string-contains uri "://") ;; a bit hacky
-           (string->symbol (conc "<" uri ">"))
-           (string->symbol uri))))
-
-(define (default-graph)
-  (let ((df (*default-graph*)))
-    (and df (read-uri df))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utilities
 (define (car-when p)
@@ -34,6 +24,14 @@
 ;;        (splice-when body-val body-val)))
 ;;     ((splice-when test ... body)
 ;;      (if (not (and test)) '() body))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Extend definitions from sparql-query
+(define (default-graph)
+  (let ((df (*default-graph*)))
+    (and df (read-uri df))))
+
+(*rdf-unpacker* unpack-sparql-bindings)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Data types
@@ -187,33 +185,6 @@
       ns-pair
       (string->symbol
        (format #f "<~A>" (expand-namespace* ns-pair namespaces)))))               
-
-(define sparql-binding
-  (match-lambda
-    ((var . bindings)
-     (let ((value (alist-ref 'value bindings))
-           (type (alist-ref 'type bindings)))
-       (match type
-         ("literal"
-          (let ((lang (alist-ref 'xml:lang bindings)))
-            (cons var
-                  (if lang
-                      (conc value "@" lang) 
-                      value))))
-         ("typed-literal"
-          (let ((datatype (alist-ref 'datatype bindings)))
-            (case datatype
-              (("http://www.w3.org/2001/XMLSchema#integer")
-               (cons var (string->number value)))
-              (else (cons var value)))))
-         ("uri"
-          (cons var (read-uri (alist-ref 'value bindings))))
-         (else (cons var value)))))))
-
-(define unpack-sparql-bindings
-  (json-unpacker sparql-binding))
-
-(*sparql-query-unpacker* unpack-sparql-bindings)
 
 (define (rdf->json exp)
   (cond ((symbol? exp) (write-uri exp))
