@@ -27,11 +27,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Extend definitions from sparql-query
-(define (default-graph)
-  (let ((df (*default-graph*)))
-    (and df (read-uri df))))
-
-(*rdf-unpacker* unpack-sparql-bindings)
+(*query-unpacker* typed-sparql-bindings)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Data types
@@ -493,7 +489,7 @@
 (define (s-bind as var)
   (format #f "BIND ~A as ~A" as var))
 
-(define (s-insert triples #!key (with-graph (default-graph)))
+(define (s-insert triples #!key (with-graph (*default-graph*)))
   (conc (if with-graph (format #f "WITH ~A " with-graph) "")
         (format #f "~%INSERT {~%  ~A ~%}" triples)))
 
@@ -508,7 +504,7 @@
       (->string vars)))
 
 (define (s-select vars statements
-                  #!key with-graph (from-graph (default-graph)) 
+                  #!key with-graph (from-graph (*default-graph*)) 
                   (from-named-graphs '()) order-by)
   (let ((query (if (pair? statements) (string-join statements "\n") statements))
         (order-statement (if order-by
@@ -525,7 +521,7 @@
                   query order-statement))))
 
 (define (s-delete statements
-                  #!key insert with-graph (from-graph (default-graph)) 
+                  #!key insert with-graph (from-graph (*default-graph*)) 
                   (from-named-graphs '()) where)
   (let ((statements (if (pair? statements) (string-join statements "\n") statements)))
     (conc (if with-graph  (format #f "WITH ~A " with-graph) "")
