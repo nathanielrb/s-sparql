@@ -96,7 +96,7 @@
 ;; Context
 ;; Inverted trees
 ;; needs refactoring and extending...
-(define-record context head next previous parent)
+(define-record context head previous next parent)
 
 (define empty-context (make-context #f #f #f #f))
 
@@ -115,28 +115,42 @@
          (and parent
               (make-context 
                (filter (lambda (x) (not (null? x)))
-                       (list (context-head parent)
-                             (context-previous context)
-                             (context-head context)
-                             (context-next context)))
+                       (append (list (context-head parent))
+                               (reverse (context-previous context))
+                               (list (context-head context))
+                               (context-next context)))
                (context-previous parent)
                (context-next parent)
                (context-parent parent))))))
 
+;; (define (parent-context context)
+;;   (and (context? context)
+;;        (let ((parent (context-parent context)))
+;;          (and parent
+;;               (make-context 
+;;                (filter (compose not null?)
+;;                        (list (context-head parent)
+;;                              (reverse (context-previous context))
+;;                              (context-head context)
+;;                              (context-next context)))
+;;                (context-previous parent)
+;;                (context-next parent)
+;;                (context-parent parent))))))
+
 (define (previous-sibling context)
   (and (pair? (context-next context))
        (make-context (car (context-previous context))
+                     (cdr (context-previous context))
                      (cons (context-head context)
                            (context-next context))
-                     (cdr (context-previous context))
                      (context-parent context))))
 
 (define (next-sibling context)
   (and (pair? (context-next context))
        (make-context (car (context-next context))
-                     (cdr (context-next context))
                      (cons (context-head context)
                            (context-previous context))
+                     (cdr (context-next context))
                      (context-parent context))))
 
 (define (context-children context #!optional filtr)
@@ -310,7 +324,8 @@
 	(let-values (((new-statements updated-bindings)
 		      (apply-rules (car blocks) bindings rules
                                    (make-context
-                                    (car blocks) visited-blocks
+                                    (car blocks) 
+                                    visited-blocks
                                     (cdr blocks) 
                                     (make-parent-context (*context*))))))
 	  (loop (cdr blocks)
