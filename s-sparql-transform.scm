@@ -77,6 +77,7 @@
     ((_ key ... alist) 
      (nested-alist-ref* (list key ...) alist))))
 
+
 (define (nested-alist-update* keys val alist)
   (let ((key (car keys)))
     (if (null? (cdr keys))
@@ -85,12 +86,38 @@
          key
          (nested-alist-update*
           (cdr keys) val (or (alist-ref key alist) '()))
-         alist))))
+          alist))))
+
+(define (nested-alist-update alist val #!rest keys)
+  (nested-alist-update* keys val alist))
 
 (define-syntax nested-alist-update
   (syntax-rules ()
     ((_ key ... val alist) 
      (nested-alist-update* (list key ...) val alist))))
+
+(define (nested-alist-delete* keys alist)
+  (let ((key (car keys)))
+    (if (null? (cdr keys))
+        (alist-delete key alist)
+        (let ((inner (alist-ref key alist)))
+          (if (null? inner) #f
+              (alist-update
+               key
+               (nested-alist-delete* (cdr keys) inner)
+               alist))))))
+
+(define-syntax nested-alist-delete
+  (syntax-rules ()
+    ((_ key ... alist)
+     (nested-alist-delete* (list key ...) alist))))
+
+(define (nested-alist-replace* keys proc alist)
+  (nested-alist-update* keys (proc (nested-alist-ref* keys alist)) alist))
+
+(define (nested-alist-replace alist proc #!rest keys)
+  (nested-alist-replace* keys proc alist))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Context
@@ -217,14 +244,18 @@
 
 (define default-rules (make-parameter (lambda () '())))
 
-(define (nested-alist-replace* keys proc alist)
-  (nested-alist-update* keys (proc (nested-alist-ref* keys alist)) alist))
-
 (define (get-binding* vars key bindings)
-  (nested-alist-ref* (append vars (list '@bindings key)) bindings))
+  (let ((inner (nested-alist-ref* (append vars (list '@bindings)) bindings)))
+    (and inner 
+         (let ((pair (assoc key inner)))
+           (and pair (cdr pair))))))
 
 (define (get-binding/default* vars key bindings default)
-  (or (nested-alist-ref* (append vars (list '@bindings key)) bindings)) default)
+  (let ((inner (nested-alist-ref* (append vars (list '@bindings)) bindings)))
+    (if inner
+        (let ((pair (assoc key inner)))
+          (if pair (cdr pair) default))
+        default)))
 
 (define-syntax get-binding
   (syntax-rules ()
@@ -236,8 +267,18 @@
     ((_ var ... key bindings default)
      (get-binding/default* (list var ...) key bindings default))))
 
+(define (assoc-update key val alist)
+  (cond ((null? alist) (list (cons key val)))
+        ((equal? key (caar alist))
+         (cons (cons key val) (cdr alist)))
+        (else (cons (car alist) (assoc-update key val (cdr alist))))))
+
 (define (update-binding* vars key val bindings)
-  (nested-alist-update* (append vars (list '@bindings key)) val bindings))
+  (nested-alist-update*
+   (append vars (list '@bindings))
+   (assoc-update key val
+                 (or (nested-alist-ref* (append vars (list '@bindings)) bindings) '()))
+   bindings))
 
 (define (update-bindings* vkvs bindings)
   (if (null? vkvs) bindings
@@ -248,13 +289,31 @@
 
 (define-syntax update-bindings
   (syntax-rules ()
-    ((_ (var ... key val) ... bindings)
+    ((_ ((var ... key val) ...) bindings)
      (update-bindings* (list (list (list var ...) key val) ...) bindings))))
 
 (define-syntax update-binding
   (syntax-rules ()
     ((_ var ... key val bindings)
      (update-binding* (list var ...) key val bindings))))
+
+(define (delete-binding* vars key bindings)
+  (nested-alist-delete* (append vars (list '@bindings key)) bindings))
+
+(define-syntax delete-binding
+  (syntax-rules ()
+    ((_ var ... key bindings) (delete-binding* (list var ...) key bindings))))
+
+(define-syntax delete-bindings
+  (syntax-rules ()
+    ((_ ((var ... key) ...) bindings)
+     (delete-bindings* (list (list (list var ...) key) ...) bindings))))
+
+(define (delete-bindings* vks bindings)
+  (if (null? vks) bindings
+      (match (car vks)
+        ((vars key)
+         (delete-binding* vars key (delete-bindings* (cdr vks) bindings))))))
 
 (define (project-bindings vars bindings)
   (let loop ((bindings bindings) (projected-bindings '()))

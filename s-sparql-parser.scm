@@ -1201,7 +1201,8 @@
 
 ;; DescribeQuery
 
-;; ConstructQuery
+;;(define ConstructQuery
+  
 
 (define SelectClause
   ;(->alist
@@ -1270,7 +1271,8 @@
     (->alist '@Query
              (alternatives
               SelectQuery
-              ;; ConstructQuery DescribeQuery AskQuery )
+              ;;ConstructQuery
+              ;; DescribeQuery AskQuery )
               ))
     ValuesClause
     )))
@@ -1299,62 +1301,32 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Accessors
 
-(define (nested-alist-ref alist #!rest keys)
-  (nested-alist-ref* keys alist))
-
-(define (nested-alist-ref* keys alist)
-  (and keys       
-       (if (null? keys)
-           alist
-           (let ((nested (alist-ref (car keys) alist)))
-             (and nested
-                  (nested-alist-ref* (cdr keys) nested))))))
-
-(define (nested-alist-update* keys val alist)
-  (let ((key (car keys)))
-    (if (null? (cdr keys))
-        (alist-update key val alist)
-        (alist-update 
-         key
-         (nested-alist-update*
-          (cdr keys) val (or (alist-ref key alist) '()))
-          alist))))
-
-(define (nested-alist-update alist val #!rest keys)
-  (nested-alist-update* keys val alist))
-
-(define (nested-alist-replace* keys proc alist)
-  (nested-alist-update* keys (proc (nested-alist-ref* keys alist)) alist))
-
-(define (nested-alist-replace alist proc #!rest keys)
-  (nested-alist-replace* keys proc alist))
-
 (define (assoc-when sym alist)
   (and alist
       (assoc sym alist)))
 
-(define (unit-query QueryUnit)
-  (nested-alist-ref QueryUnit '@Unit '@Query))
+;; (define (unit-query QueryUnit)
+;;   (nested-alist-ref QueryUnit '@Unit '@Query))
 
-(define (unit-query-dataset QueryUnit)
-  (nested-alist-ref QueryUnit '@Unit '@Query '@Dataset))
+;; (define (unit-query-dataset QueryUnit)
+;;   (nested-alist-ref QueryUnit '@Unit '@Query '@Dataset))
 
-(define (unit-query-select QueryUnit)
-  (assoc-when 'SELECT (nested-alist-ref QueryUnit '@Unit '@Query)))
+;; (define (unit-query-select QueryUnit)
+;;   (assoc-when 'SELECT (nested-alist-ref QueryUnit '@Unit '@Query)))
 
-(define (unit-query-where QueryUnit)
-  (assoc-when 'WHERE (nested-alist-ref QueryUnit '@Unit '@Query)))
+;; (define (unit-query-where QueryUnit)
+;;   (assoc-when 'WHERE (nested-alist-ref QueryUnit '@Unit '@Query)))
 
-(define (unit-update QueryUnit)
-  (nested-alist-ref QueryUnit '@Unit '@Update))
+;; (define (unit-update QueryUnit)
+;;   (nested-alist-ref QueryUnit '@Unit '@Update))
 
-(define (unit-update-delete QueryUnit)
-  (assoc-when 'DELETE (unit-update QueryUnit)))
+;; (define (unit-update-delete QueryUnit)
+;;   (assoc-when 'DELETE (unit-update QueryUnit)))
 
-(define (unit-update-where QueryUnit)
-  (assoc-when 'WHERE (unit-update QueryUnit)))
+;; (define (unit-update-where QueryUnit)
+;;   (assoc-when 'WHERE (unit-update QueryUnit)))
 
-(define (unit-update-insert QueryUnit)
-  (assoc-when 'INSERT (unit-update QueryUnit)))
+;; (define (unit-update-insert QueryUnit)
+;;   (assoc-when 'INSERT (unit-update QueryUnit)))
 
 )
