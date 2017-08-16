@@ -297,6 +297,24 @@
     ((_ var ... key val bindings)
      (update-binding* (list var ...) key val bindings))))
 
+(define (fold-binding* val vars key kons knil bindings)
+  (update-binding* vars key
+                   (kons val (get-binding/default* vars key bindings knil))
+                   bindings))
+
+(define-syntax fold-binding 
+  (syntax-rules ()
+    ((_ val vars ... key kons knil bindings)
+     (fold-binding* val (list vars ...) key kons knil bindings))))
+
+(define (cons-binding* val vars key bindings)
+  (fold-binding* val vars key cons '() bindings))
+
+(define-syntax cons-binding
+  (syntax-rules ()
+    ((_ val vars ... key bindings)
+     (cons-binding* val (list vars ...) key bindings))))
+
 (define (delete-binding* vars key bindings)
   (nested-alist-delete* (append vars (list '@bindings key)) bindings))
 
