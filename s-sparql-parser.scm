@@ -5,7 +5,7 @@
 ;; https://code.call-cc.org/svn/chicken-eggs/release/4/json-abnf/trunk/json-abnf.scm
 
 (module s-sparql-parser *
-  (import chicken scheme extras data-structures srfi-1) 
+(import chicken scheme extras data-structures srfi-1) 
 
 (use srfi-1 srfi-13 matchable irregex)
 
@@ -822,9 +822,20 @@
                 (:: (between-fws TriplesNode)
                     (between-fws PropertyList))))
 
-;; ConstructTriples
+(define ConstructTriples
+  (vac
+   (::
+    (->list TriplesSameSubject)
+    (:?
+     (::
+      (drop-consumed (lit/sp "."))
+      ConstructTriples)))))
 
-;; ConstructTemplate
+(define ConstructTemplate
+  (::
+   (drop-consumed (lit/sp "{"))
+   (:? ConstructTriples)
+   (drop-consumed (lit/sp "}"))))
 
 (define ExpressionList
   (alternatives
@@ -1201,23 +1212,34 @@
 
 ;; DescribeQuery
 
-;;(define ConstructQuery
-  
+(define ConstructQuery
+  (->list
+   (:: 
+    (lit/sym "CONSTRUCT")
+    (alternatives
+     (::
+      ConstructTemplate
+      (:* DatasetClause)
+      (->list WhereClause)
+      SolutionModifier)
+     (::
+      (:* DatasetClause)
+      (->list
+       (:: 
+        (lit/sym "WHERE")
+        (drop-consumed (lit/sp "{"))
+        (:? TriplesTemplate)
+        (drop-consumed (lit/sp "}"))
+        SolutionModifier)))))))
 
 (define SelectClause
-  ;(->alist
-   ;'@SelectClause
    (::
     (bind-consumed->symbol 
      (alternatives
       (lit/sp "SELECT DISTINCT")
       (lit/sp "SELECT REDUCED")
       (lit/sp "SELECT")))
-    ;; (lit/sym "SELECT")
-    ;; (:?
-    ;; (alternatives (lit/sym "DISTINCT") (lit/sym "REDUCED")))
     (alternatives
-;     (->list
       (:+
        (between-fws 
         (alternatives
@@ -1271,7 +1293,7 @@
     (->alist '@Query
              (alternatives
               SelectQuery
-              ;;ConstructQuery
+              ConstructQuery
               ;; DescribeQuery AskQuery )
               ))
     ValuesClause
