@@ -1213,24 +1213,28 @@
 ;; DescribeQuery
 
 (define ConstructQuery
-  (->list
-   (:: 
-    (lit/sym "CONSTRUCT")
-    (alternatives
+  (alternatives
+   (::
+    (->list
      (::
-      ConstructTemplate
-      (:* DatasetClause)
-      (->list WhereClause)
-      SolutionModifier)
+      (lit/sym "CONSTRUCT")
+      ConstructTemplate))
+    (->alist '@Dataset (:* DatasetClause))
+    (->list WhereClause)
+    SolutionModifier)
+   (::
+    (->list
      (::
-      (:* DatasetClause)
-      (->list
-       (:: 
-        (lit/sym "WHERE")
-        (drop-consumed (lit/sp "{"))
-        (:? TriplesTemplate)
-        (drop-consumed (lit/sp "}"))
-        SolutionModifier)))))))
+      (lit/sym "CONSTRUCT")
+      ConstructTemplate))
+    (->alist '@Dataset (:* DatasetClause))
+    (->list
+     (:: 
+      (lit/sym "WHERE")
+      (drop-consumed (lit/sp "{"))
+      (:? TriplesTemplate)
+      (drop-consumed (lit/sp "}"))
+      SolutionModifier)))))
 
 (define SelectClause
    (::
