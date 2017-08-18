@@ -242,8 +242,6 @@
 ;; Bindings
 (define *rules* (make-parameter '()))
 
-(define default-rules (make-parameter (lambda () '())))
-
 (define (get-binding* vars key bindings)
   (let ((inner (nested-alist-ref* (append vars (list '@bindings)) bindings)))
     (and inner 
@@ -389,7 +387,7 @@
          (list (remove-trailing-char (cadr decl)) (write-uri (caddr decl))))
        (filter PrefixDecl? (all-prologues QueryUnit))))
 
-(define (rewrite-query Query #!optional (rules ((default-rules))))
+(define (rewrite-query Query rules)
   (parameterize ((query-namespaces (query-prefixes Query))
                  (*rules* rules))
     (rewrite Query '() rules)))
