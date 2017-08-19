@@ -50,7 +50,7 @@
     ((_ p)      (bind (consumed-values->list)  p))
     ))
 
-(define-syntax ->alist
+(define-syntax ->node
   (syntax-rules () 
     ((_ label l p)    (bind (consumed-values->list label l)  p))
     ((_ label p)      (bind (consumed-values->list label)  p))
@@ -175,8 +175,8 @@
 ;;   (set-from-string "_")
 
 (define ANON
-  (->alist
-   '|@[]|
+  (->node
+   '@Blank
     (:: (drop-consumed (lit/sp "["))
         (drop-consumed (:? fws))
         (drop-consumed (lit/sp "]")))))
@@ -184,8 +184,8 @@
 ;; WS
 
 (define NIL
-  (->alist
-   `|@()|
+  (->node
+   '@NIL
    (:: 
     (drop-consumed (lit/sp "("))
     (drop-consumed (lit/sp ")")))))
@@ -307,7 +307,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Grammar
-
 (define BlankNode
    (alternatives BLANK_NODE_LABEL ANON))
 
@@ -385,10 +384,10 @@
   (vac
    (bracketted-function 
     label
-    (->list
+;;    (->list
      (::
       (:? (lit/sym "DISTINCT")) 
-      content)))))
+      content))))
 
 (define Aggregate
   (vac
@@ -506,7 +505,7 @@
 
 (define BrackettedExpression
   (vac
-   (->alist
+   (->node
     '|@()|
     (::
      (drop-consumed (lit/sp "("))
@@ -582,7 +581,7 @@
   (:: ConditionalAndExpression
       (:* (:: (lit/sym "||") ConditionalAndExpression)))) ;; => Polish notation?
 
-(define Expression (->list ConditionalOrExpression))
+(define Expression ConditionalOrExpression)
   
 (define GraphTerm
    (alternatives
@@ -614,8 +613,7 @@
 
 (define CollectionPath
   (vac
-   (->alist
-    '|@()|
+   (->list
     (:: 
      (drop-consumed (lit/sp "("))
      (:+ GraphNodePath)
@@ -623,16 +621,15 @@
 
 (define Collection
   (vac
-   (->alist
-    '|@()|
+   (->list
     (:: (lit/sp "(")
 	(:+ GraphNode)
 	(lit/sp ")")))))
 
 (define BlankNodePropertyListPath
   (vac
-   (->alist
-    '|@[]|
+   (->node
+    '@Blank
    (:: (drop-consumed (lit/sym "["))
        PropertyListPathNotEmpty
         (drop-consumed (lit/sym "]")))) ))
@@ -642,8 +639,8 @@
 
 (define BlankNodePropertyList
   (vac
-   (->alist
-    '|@[]|
+   (->node
+    '@Blank
     (:: (drop-consumed (lit/sym "["))
        PropertyListNotEmpty
         (drop-consumed (lit/sym "]")))) ))
@@ -671,12 +668,11 @@
 (define PathNegatedPropertySet
   (alternatives
    PathOneInPropertySet
-   (->alist
-    '|@()| 
+   (->list
     (::
      (drop-consumed (lit/sp "("))
      (alternatives
-      (->alist
+      (->node
        '||
        (:: 
         PathOneInPropertySet
@@ -692,13 +688,12 @@
     (alternatives
      iri
      (lit/sym "a")
-     (->alist
+     (->node
       '!
       (:: 
        (drop-consumed (char-list/lit "!"))
        PathNegatedPropertySet))
-     (->alist
-      '|@()| 
+     (->list
       (::
        (drop-consumed (lit/sp "("))
        Path
@@ -724,15 +719,15 @@
 (define PathElt
   ;; (:: PathPrimary (:? PathMod)))
   (alternatives
-   (->alist '? (:: PathPrimary (drop-consumed (lit/sp "? "))))
-   (->alist '+ (:: PathPrimary (drop-consumed (lit/sp "+ "))))
-   (->alist '* (:: PathPrimary (drop-consumed (lit/sp "* "))))
+   (->node '? (:: PathPrimary (drop-consumed (lit/sp "? "))))
+   (->node '+ (:: PathPrimary (drop-consumed (lit/sp "+ "))))
+   (->node '* (:: PathPrimary (drop-consumed (lit/sp "* "))))
    PathPrimary))
 
 (define PathSequence
   (vac
    (alternatives
-    (->alist 
+    (->node 
      '/
      (:: 
       PathEltOrInverse
@@ -742,7 +737,7 @@
 
 (define PathAlternative
   (alternatives
-   (->alist
+   (->node
     '||
     (:: PathSequence
         (:+
@@ -756,11 +751,13 @@
 (define ObjectPath GraphNodePath)
 
 (define	ObjectListPath
-  (->list
-   (:: ObjectPath
-       (:*
-        (:: (drop-consumed (lit/sp ","))
-            ObjectPath)))))
+  (alternatives
+   (->list
+    (:: ObjectPath
+	(:+
+	 (:: (drop-consumed (lit/sp ","))
+	     ObjectPath))))
+   ObjectPath))
 
 (define VerbSimple Var)
 
@@ -768,20 +765,24 @@
 
 (define PropertyListPathNotEmpty
   (vac
-   (->list
+   (alternatives 
+    (->list
+     (::
+      (->list
+       (::
+	(between-fws (alternatives VerbPath VerbSimple))
+	ObjectListPath))
+      (:+
+       (:: 
+	(drop-consumed (lit/sp ";"))
+	(:?
+	 (->list
+	  (::
+	   (between-fws (alternatives VerbPath VerbSimple))
+	   ObjectList)))))))
     (::
-     (->list
-      (::
-       (between-fws (alternatives VerbPath VerbSimple))
-       ObjectListPath))
-     (:*
-      (:: 
-       (drop-consumed (lit/sp ";"))
-       (:?
-        (->list
-         (::
-          (between-fws (alternatives VerbPath VerbSimple))
-          ObjectList)))))))))
+     (between-fws (alternatives VerbPath VerbSimple))
+     ObjectListPath))))
 
 (define PropertyListPath
   (:? PropertyListPathNotEmpty))
@@ -796,23 +797,29 @@
 (define Object GraphNode)
 
 (define ObjectList
-  (->list
-   (:: Object
-       (:*
-	(:: (drop-consumed (lit/sp ","))
-	    Object)))))
+  (alternatives
+   (->list
+    (:: Object
+	(:+
+	 (:: (drop-consumed (lit/sp ","))
+	     Object))))
+   Object))
 
 (define Verb (alternatives VarOrIri (lit/sym "a")))
 
 (define PropertyListNotEmpty
-  (->list
-   (:: (->list 
-        (:: (between-fws Verb)
-            ObjectList))
-       (:* (:: (drop-consumed (lit/sp ";"))
+  (alternatives
+   (->list
+    (:: (->list 
+	 (:: (between-fws Verb)
+	     ObjectList))
+	(:+ (:: (drop-consumed (lit/sp ";"))
                (:? (->list
                     (:: (between-fws Verb)
-                        ObjectList))))))))
+                        ObjectList)))))))
+    (::
+     (:: (between-fws Verb)
+	 ObjectList))))
 
 (define PropertyList (:? PropertyListNotEmpty))
 
@@ -840,34 +847,26 @@
 (define ExpressionList
   (alternatives
    NIL
-   (->alist
-    '|@()|
+   (->list
     (:: (drop-consumed (lit/sp "("))
         Expression
         (:*
-         (->alist
-          '|@()|
-          (::
-           (drop-consumed (lit/sp "("))
-           Expression
-           (drop-consumed (lit/sp ")")))))
+	 (::
+	  (drop-consumed (lit/sp ","))
+           Expression))
         (drop-consumed (lit/sp ")"))))))
 
 (define ArgList
   (alternatives
    NIL
-   (->alist
-    '|@()|
+   (->list
     (:: (drop-consumed (lit/sp "("))
         (:? (lit/sym "DISTINCT"))
         Expression
         (:*
-         (->alist
-          '|@()|
           (::
-           (drop-consumed (lit/sp "("))
-             Expression
-             (drop-consumed (lit/sp ")")))))
+           (drop-consumed (lit/sp ","))
+	   Expression))
         (drop-consumed (lit/sp ")"))))))
 
 (define FunctionCall 
@@ -881,7 +880,7 @@
 (define GroupOrUnionGraphPattern
   (vac
    (alternatives
-     (->alist
+     (->node
       'UNION
       (::
        (->list GroupGraphPattern)
@@ -901,8 +900,7 @@
   (::
    (alternatives 
     NIL 
-   (->alist
-    '|@()|
+   (->list
     (::      
      (drop-consumed (lit/sp "("))
      (:* (between-fws Var))
@@ -911,8 +909,7 @@
     (drop-consumed (lit/sp "{"))
     (:*
      (alternatives
-      (->alist
-       '|@()|
+      (->list
        (::
         (drop-consumed (lit/sp "("))
         (:* (between-fws DataBlockValue))
@@ -937,7 +934,7 @@
   (->list
    (:: 
     (lit/sym "BIND")
-    (->alist
+    (->node
      'AS
      (:: 
       (drop-consumed (lit/sp "("))
@@ -1040,7 +1037,6 @@
     iri 
     (:: (lit/sym "NAMED") iri))))
   
-
 (define InsertClause
   (->list
    (:: 
@@ -1054,20 +1050,20 @@
     QuadData)))
 
 (define Modify
-  (:: 
-   (:?
-    (->alist
-     '@Dataset
-     (:: (lit/sym "WITH") iri)))
-   (alternatives 
-    (:: DeleteClause
-        (:? InsertClause))
-    InsertClause)
-   (->alist '@Using (:* UsingClause))
-   (->list
-    (::
-     (lit/sym "WHERE")
-     GroupGraphPattern))))
+   (:: 
+    (:?
+     (->node
+      '@Dataset
+      (->list (:: (lit/sym "WITH") iri))))
+    (alternatives 
+     (:: DeleteClause
+	 (:? InsertClause))
+     InsertClause)
+    (->node '@Using (:* UsingClause))
+    (->list
+     (::
+      (lit/sym "WHERE")
+      GroupGraphPattern))))
 
 (define DeleteWhere
   (->list
@@ -1120,13 +1116,14 @@
 (define Update
   (vac
    (::
-    (->list
+    (->node
+     '@Update
      (:: 
-      (->alist '@Prologue Prologue)
-      (:? (->alist '@Update Update1))))
-    (:? 
+      (->node '@Prologue Prologue)
+      Update1))
+    (:?
      (:: 
-      (drop-consumed (char-list/lit ";"))
+      (drop-consumed (lit/sp ";"))
       Update)))))
 
 (define ValuesClause
@@ -1175,16 +1172,42 @@
       (lit/sp "BY")))
     (:+ (between-fws OrderCondition)))))
     
-;; HavingClause
+(define HavingClause
+  (->list
+   (::
+    (lit/sym "HAVING")
+    Constraint)))
 
-;; GroupCondition
+(define GroupCondition
+  (alternatives
+   BuiltInCall
+   FunctionCall
+   (::
+    (->node
+     'AS
+     (:: 
+      (drop-consumed (lit/sp "("))
+      Expression
+      (:?
+       (::
+	(drop-consumed (lit/sym "AS"))
+	Var))
+      (drop-consumed (lit/sp ")")))))
+   Var))
 
-;; GroupClause
+(define GroupClause
+  (->list
+   (::
+    (bind-consumed->symbol 
+     (::
+      (lit/sp "GROUP ")
+      (lit/sp "BY")))
+    (:+ GroupCondition))))
 
 (define SolutionModifier
   (::
-   ;; (:? GroupClause)
-   ;; (:? HavingClause)
+   (:? GroupClause)
+   (:? HavingClause)
    (:? OrderClause)
    (:? LimitOffsetClauses)))
 
@@ -1219,15 +1242,12 @@
      (::
       (lit/sym "CONSTRUCT")
       ConstructTemplate))
-    (->alist '@Dataset (:* DatasetClause))
+    (->node '@Dataset (:* DatasetClause))
     (->list WhereClause)
     SolutionModifier)
    (::
-    (->list
-     (::
-      (lit/sym "CONSTRUCT")
-      ConstructTemplate))
-    (->alist '@Dataset (:* DatasetClause))
+    (->list (lit/sym "CONSTRUCT"))
+    (->node '@Dataset (:* DatasetClause))
     (->list
      (:: 
       (lit/sym "WHERE")
@@ -1244,32 +1264,36 @@
       (lit/sp "SELECT REDUCED")
       (lit/sp "SELECT")))
     (alternatives
-      (:+
-       (between-fws 
-        (alternatives
-         Var
-         (->alist
-          'AS
-          (:: 
-           (drop-consumed (lit/sp "("))
-           Expression
-           (drop-consumed (lit/sym "AS"))
-           Var
-           (drop-consumed (lit/sp ")")))))))
+     (:+
+      (between-fws 
+       (alternatives
+	Var
+	(->node
+	 'AS
+	 (:: 
+	  (drop-consumed (lit/sp "("))
+	  Expression
+	  (drop-consumed (lit/sym "AS"))
+	  Var
+	  (drop-consumed (lit/sp ")")))))))
      (lit/sym "*"))))
 
 (define SubSelect
-   (:: (->list SelectClause)
-       (->list WhereClause)
+  (->node
+   '@SubSelect
+   (:: 
+    (->list SelectClause)
+    (->list WhereClause))
        ;; SolutionModifier ValuesClause
-       ))
+   ))
 
 (define SelectQuery
-  (:: (->list SelectClause) ;; '@SelectClause 
-      (->alist '@Dataset (:* DatasetClause)) ;;'@DatasetClause
-      (->list WhereClause) 
-      SolutionModifier
-      ))
+   (::
+    (->list SelectClause)
+    (->node '@Dataset (:* DatasetClause)) ;;'@DatasetClause
+    (->list WhereClause) 
+    SolutionModifier
+    ))
 
 (define PrefixDecl
   (->list
@@ -1283,28 +1307,27 @@
 ;;  BaseDecl
 
 (define Prologue
-  ;; (bind-consumed-values->alist
+  ;; (bind-consumed-values->node
   ;;'*PROLOGUE*
    (repetition PrefixDecl))
 
 (define UpdateUnit
-(->alist '@Unit  Update))
+(->node '@UpdateUnit  Update))
 
 (define Query
-  (->list
+  (->node
+   '@Query
    (concatenation
-    (->alist '@Prologue Prologue)
-    (->alist '@Query
-             (alternatives
-              SelectQuery
-              ConstructQuery
-              ;; DescribeQuery AskQuery )
-              ))
-    ValuesClause
-    )))
+    (->node '@Prologue Prologue)
+    (alternatives
+     SelectQuery
+     ConstructQuery
+     ;; DescribeQuery AskQuery )
+     )
+    ValuesClause)))
 
 (define QueryUnit
-  (->alist '@Unit Query))
+  (->node '@QueryUnit Query))
 
 (define TopLevel (alternatives QueryUnit UpdateUnit))
 
@@ -1314,15 +1337,15 @@
 ;; should also read from ports
 (define (parse-query query)
   ;;(cons '@TOP
-  (car (lex TopLevel err query)))
+  (caar (lex TopLevel err query)))
 
 (define (read-sparql query)
   ;;(cons '@TOP
-  (car (lex TopLevel err query)))
+  (caar (lex TopLevel err query)))
 
 (define (read-triples query)
   ;;(cons '@TOP
-  (car (lex GroupGraphPatternSub err query)))
+  (caar (lex GroupGraphPatternSub err query)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Accessors

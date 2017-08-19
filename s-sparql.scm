@@ -47,6 +47,7 @@
 
 (define (triple? expr)
   (and (pair? expr)
+       (or (= (length expr) 2)  (= (length expr) 3))
        (or (iri? (car expr))
 	   (sparql-variable? (car expr))
 	   (blank-node? (car expr)))))
@@ -74,7 +75,7 @@
 (define (blank-node? obj)
   (and (symbol? obj)
        (or (equal? "_:" (substring (->string obj) 0 2))
-           (equal? obj '|@[]|))))
+           (equal? obj '@Blank))))
 
 (define (blank-node-path? obj)
   (and (list? obj)
@@ -292,16 +293,14 @@
           ((@Update) (conc (string-join (map write-sparql (cdr exp)) "\n") "\n"))
           ((@Dataset @Using) (string-join (map write-sparql (cdr exp)) "\n"))
 
-          ;; ?? how to differentiate between triple collections and functions etc.?
-          ((|@()|) (format #f "(~A)"
-                           (string-join 
-                            (map (cut write-sparql <> (+ level 1)) (cdr exp)) 
-                            " ")))
+	  ;; arglist, collections (list?) in ()
 
-          ((|@[]|) (format #f "[ ~A ]"
+          ((@Blank) (format #f "[ ~A ]"
                            (string-join
                             (map write-triple-properties (cdr exp)) 
                             " ")))
+	  ((@SubSelect) (format #f "~A~A ~A"
+				pre (write-sparql (second exp)) (write-sparql (third exp))))
           ((SELECT |SELECT DISTINCT| |SELECT REDUCED|)
            (format #f "~A~A ~A"
                    pre (car exp)
@@ -390,7 +389,7 @@
 ;;             triple)
 ;;            ((WHERE DELETE INSERT) 
 ;;             (cons (car triple) (expand-triples (cdr triple))))
-;;            ((|@[]|)
+;;            ((@Blank)
 ;;             (expand-triple (cons (new-blank-node) (cdr triple))))
 ;;            ((|@()| MINUS OPTIONAL)
 ;;             (list (cons (car triple) (expand-triples (cdr triple)))))

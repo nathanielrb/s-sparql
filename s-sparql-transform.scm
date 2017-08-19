@@ -380,17 +380,18 @@
   (join
    (map (lambda (unit)
           (alist-ref '@Prologue unit))
-        (alist-ref '@Unit QueryUnit))))
+        (append (or (alist-ref '@Query QueryUnit) '())
+		(or (alist-ref '@Update QueryUnit) '())))))
 
 (define (query-prefixes QueryUnit)
   (map (lambda (decl)
          (list (remove-trailing-char (cadr decl)) (write-uri (caddr decl))))
        (filter PrefixDecl? (all-prologues QueryUnit))))
 
-(define (rewrite-query Query rules)
-  (parameterize ((query-namespaces (query-prefixes Query))
+(define (rewrite-query QueryUnit rules)
+  (parameterize ((query-namespaces (query-prefixes (list QueryUnit)))
                  (*rules* rules))
-    (rewrite Query '() rules)))
+    (rewrite (list QueryUnit) '() rules)))
 
 (define (rewrite* blocks bindings rules kappend knil)
   (let loop ((blocks blocks) (statements knil) (bindings bindings) (visited-blocks '()))
