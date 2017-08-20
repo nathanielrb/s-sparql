@@ -47,7 +47,7 @@
 
 (define (triple? expr)
   (and (pair? expr)
-       (or (= (length expr) 2)  (= (length expr) 3))
+       (<= (length expr) 3)
        (or (iri? (car expr))
 	   (sparql-variable? (car expr))
 	   (blank-node? (car expr)))))
@@ -73,9 +73,10 @@
 	    MINUS OPTIONAL UNION GRAPH)))
 
 (define (blank-node? obj)
-  (and (symbol? obj)
-       (or (equal? "_:" (substring (->string obj) 0 2))
-           (equal? obj '@Blank))))
+  (and (pair? obj)
+       (symbol? (car obj))
+       (or (equal? "_:" (substring (->string (car obj)) 0 2))
+           (equal? (car obj) '@Blank))))
 
 (define (blank-node-path? obj)
   (and (list? obj)

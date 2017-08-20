@@ -117,35 +117,78 @@
 (define (write-triple-objects exp)
   (if (pair? exp)
       (or (write-sparql-typed-literal exp)
+	  (write-sparql-blank-node exp)
           (string-join (map (lambda (y) (sparql y)) exp) ", "))
       (sparql exp)))
 
-(define (write-triple triple #!optional (level 0))
-  (let ((pre (apply conc (make-list level " "))))
-    (conc
-     pre
-     (string-join
-      (match triple
-	((subject properties) 
-	 (list (sparql subject)
-	       (write-triple-properties properties)))
-	((subject predicate objects)
-	 (list (sparql subject)
-	       (write-triple-properties predicate)
-	       (write-triple-objects objects)))))
-     ".")))
+(define (write-triple triple)
+  (conc
+   (string-join ;; useful?
+    (match triple
+      (((`@Blank . properties))
+       (print "blank" triple)
+       (list (write-sparql-blank-node (car triple))))
+	
+      ((subject properties) 
+       (list (sparql subject)
+	     (write-triple-properties properties)))
+      ((subject predicate objects)
+       (list (sparql subject)
+	     (write-triple-properties predicate)
+	     (write-triple-objects objects)))))
+   "."))
+
+(define (write-sparql-blank-node node)
+  (match node
+    ((`@Blank . properties)
+     (format "[~A]"
+	     (string-join
+	      (map write-triple-properties properties)
+	      " ")))
+    (else #f)))
 
 (define (sparql exp #!optional (level 0))
-  (or (write-sparql-element exp)
+  (or (write-sparql-blank-node exp)
+      (write-sparql-element exp)
       (write-sparql-function exp)
       (write-sparql-binary exp)
       ))
 
+
+
+
+
 (define (swrite block #!optional (bindings '()) (rules (*rules*)))
-  (rewrite* block bindings rules conc ""))
+  (let ((cj (lambda (a b)
+	      (cond ((equal? b "") a)
+		    ;;((equal? a "") b)
+		    ((equal? (substring b 0 1) "\n") (conc a b))
+		    (else
+		  (conc a
+			(if (equal? a "") ""
+			    (get-binding/default 'separator bindings ""))
+			(if (get-binding 'linebreak bindings) "\n" "")
+			(pre bindings)
+			b))))))
+    (rewrite* block bindings rules cj  "")))
+
+(define (sep s bindings)
+  (update-binding 'separator s bindings))
+
+(define (zero bindings)
+  (update-binding 'level 0 bindings))
 
 (define (inc bindings)
   (fold-binding 1 'level + 0 bindings))
+
+(define (one bindings)
+    (update-binding 'level 1 bindings))
+
+(define (linebreak bindings)
+  (update-binding 'linebreak #t bindings))
+
+(define (nobreak bindings)
+  (update-binding 'linebreak #f bindings))
 
 (define (pre bindings)
   (apply conc (make-list (get-binding/default 'level bindings 0) " ")))
@@ -154,7 +197,8 @@
 (define (sw/node proc)
   (lambda (block bindings)
     (let-values (((rw _) (swrite (cdr block) (inc bindings))))
-      (values (format "~%~A~A" (pre bindings) (proc block rw)) bindings))))
+      (values (format "~A"; (pre bindings)
+		      (proc block rw)) bindings))))
 
 (define (sw/val proc)
   (lambda (block bindings)
@@ -162,9 +206,9 @@
 
 (define (sw/list proc)
   (lambda (block bindings)
-    (print (car block) bindings)
     (let-values (((rw _) (swrite block (inc bindings))))
-      (values (format "~%~A~A" (pre bindings) (proc block rw)) bindings))))
+      (values (format "~A" ;(pre bindings)
+		      (proc block rw)) bindings))))
 
 (define sw/continue
   (sw/list
@@ -172,78 +216,89 @@
 
 (define sw/obj
   (lambda (block bindings)
-    (let-values (((rw _) (swrite (cdr block) bindings)))
-      (values rw bindings))))
+    (if (null? (cdr block)) (values "" bindings)
+	(let-values (((rw _) (swrite (cdr block) (linebreak bindings))))
+	  (values rw bindings)))))
          
 (define (sw/polish block bindings)
   (values
    (format "(~A ~A ~A)"
-	   (swrite (list (second block)))
+	   (swrite (list (second block)) bindings)
 	   (car block)
-	   (swrite (list (third block))))
-   '()))
+	   (swrite (list (third block)) bindings))
+   bindings))
 
 (define (sw/copy block bindings)
-  (values (format "~%~A~A"
-		  (pre bindings)
+  (values (format "~A" ; ~A
+		  ;; (pre bindings)
 		  (string-join (map symbol->string (flatten block)) " ")) 
-	  '()))
+	    bindings))
 
 (define (sw/literal exp bindings)
   (values (->string exp) '()))
 
 (define (sw/block proc)
   (lambda (block bindings)
-    (values (format "~A~A" (pre bindings) (proc block))
-	    '())))
+    (values (proc block)
+	    bindings)))
 
 (define srules
   `((,symbol? . ,sw/literal)
     (,number? . ,sw/literal)
-    ((|@()|) . ,(sw/node
-		 (lambda (block rw)
-		   (format "(~A)" rw))))
-    (,functions . ,(sw/val
-		    (lambda (block)
-		      (format "~A(~A)" (car block) (swrite (cdr block))))))
-    (,triple? 
-     . ,(lambda (triple bindings)
-	  (let ((level (get-binding/default 'level bindings 0)))
-	    (values (write-triple triple level) '()))))
+    ((@QueryUnit @UpdateUnit @Query @Update @SubSelect @Prologue) . ,sw/obj)
+    ((@Dataset @Using) . ,sw/obj)
+    ((PREFIX) . ,sw/copy)
+    ((SELECT |SELECT DISTINCT| |SELECT REDUCED|)
+     . ,(lambda (block bindings)
+	  (values (format "~A ~A" 
+			  (car block)
+			  (swrite (cdr block) (nobreak (zero (sep " " bindings)))))
+		  bindings)))
+    ((AS) . ,sw/polish)
+    ((|@()|) . ,(lambda (block bindings)
+		  (values (format "(~A)" (swrite (cdr block) (sep " " bindings)))
+			  bindings)))
+    (,functions . ,(lambda (block bindings)
+		     (values (format "~A(~A)" (car block) (swrite (cdr block) (zero (sep "," bindings))))
+			     bindings)))
+    ((WHERE
+      DELETE |DELETE WHERE| |DELETE DATA|
+      INSERT |INSERT WHERE| |INSERT DATA|
+      MINUS OPTIONAL)
+     . ,(lambda (block bindings)
+	  (values (format "~A~A" 
+			  ;;(pre bindings)
+			  (car block)
+			  (swrite (list (cdr block)) (linebreak bindings))
+			  ;;(pre bindings))
+			  )
+		  bindings)))
     ((GRAPH) 
      . ,(lambda (block bindings)
-	  (values (format "GRAPH ~A{ ~A}" (second block) (swrite (cddr block) (inc bindings)))
-		  '())))
+	  (values (format "GRAPH ~A ~A"
+			  (second block)
+			  (swrite (list (cddr block)) (linebreak bindings)))
+		  bindings)))
     ((UNION)
      . ,(lambda (block bindings)
 	  (values (string-join (map
 				(lambda (b)
-				  (swrite (list b) (inc bindings)))
+				  (swrite (list b) (linebreak bindings)))
 				(cdr block)) 
-			       (format "~AUNION" (pre bindings)))
-		  '())))
-    (,quads-block? 
-     . ,(lambda (block bindings)
-	  (values (format "~%~A~A {~A~A}" 
-			  (pre bindings)
-			  (car block)
-			  (pre bindings)
-			  (swrite (cdr block) (inc bindings))
-			  (pre bindings))
-		  '())))
-    ((@QueryUnit @UpdateUnit @Query @Update @SubSelect @Prologue) . ,sw/obj)
-    ((@Dataset @Using) . ,sw/obj)
-    ((PREFIX) . ,sw/copy)
-    ((SELECT |SELECT DISTINCT| |SELECT REDUCED|) . ,sw/continue)
-    ((AS) . ,sw/polish)
+			       (format "~%~AUNION" (pre bindings)))
+		  bindings)))
+    (,triple? 
+     . ,(lambda (triple bindings)
+	  (values (write-triple triple) '())))
+    ((LIMIT OFFSET |GROUP BY|) . ,(lambda (block bindings)
+			 (values (format "~A ~A" (car block) (swrite (cdr block) (zero (nobreak (sep " " bindings)))))
+				 bindings)))
     (,list? 
      . ,(lambda (block bindings)
-	  (values (format "~%~A{~%~A~A~%~A}~%" 
-			 (pre bindings)
-			 (pre bindings)
-			 (swrite block (inc bindings))
+	  (values (format "{~A~%~A}" 
+			 (swrite block (inc (linebreak bindings)))
 			 (pre bindings))
-		 '())))))
+		  bindings)))))
 ;;    ((@Blank) . ,(lambda (block bindings)
 ;; VALUES
 
@@ -251,13 +306,14 @@
   (swrite (list exp) '() srules))
 
 (define t1 (parse-query "SELECT ?s WHERE { SELECT ?s WHERE { ?s ?p ?o } }"))
-(define t2 (parse-query "SELECT ?s WHERE { { SELECT ?s WHERE { ?s ?p ?o } } }"))
+(define t2 (parse-query "SELECT ?s WHERE { { SELECT ?p WHERE { ?s ?p ?o } } }"))
 (define t3 (parse-query "SELECT ?s WHERE { GRAPH <G> { ?s ?p ?o. ?a ?b ?d, ?e } }"))
-(define t4 (parse-query "SELECT ?s WHERE { { ?s ?p ?o } UNION { ?s ?p ?u } }"))
-(define t5 (parse-query "SELECT ((COUNT(?a)) AS ?count) WHERE { { ?s ?p ?o } UNION { ?s ?p ?u } }"))
+(define t4 (parse-query "SELECT ?s ?p WHERE { { ?s ?p ?o } UNION { ?s ?p ?u } }"))
+(define t5 (parse-query "SELECT ((COUNT(?a) + 4) AS ?count) WHERE { { ?s ?p ?o } UNION { ?s ?p ?u } }"))
 (define t6 (parse-query "SELECT (COUNT(?a) AS ?count) WHERE { { ?s ?p ?o } UNION { ?s ?p ?u } }"))
-
-
+(define t7 (parse-query "SELECT ?s WHERE { ?s ?p ?o. [] ?x ?a, ?b; ?u ?v.  }"))
+(define t8 (parse-query "SELECT ?s WHERE { ?s ?p ?o. [?l ?m] }"))
+(define t9 (parse-query "SELECT ?s WHERE { ?s ?p [?l ?m] }"))
 ;; (define (write-sparql-special exp #!optional (level 0))
 ;;   (let ((pre (apply conc (make-list level " "))))
 ;;     (or (write-sparql-function exp)
