@@ -391,7 +391,8 @@
 (define (rewrite-query QueryUnit rules)
   (parameterize ((query-namespaces (query-prefixes (list QueryUnit)))
                  (*rules* rules))
-    (rewrite (list QueryUnit) '() rules)))
+    (let-values (((rw bindings)  (rewrite (list QueryUnit) '() rules)))
+      (values (car rw) bindings))))
 
 (define (rewrite* blocks bindings rules kappend knil)
   (let loop ((blocks blocks) (statements knil) (bindings bindings) (visited-blocks '()))

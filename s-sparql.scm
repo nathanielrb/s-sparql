@@ -75,8 +75,8 @@
 (define (blank-node? obj)
   (and (pair? obj)
        (symbol? (car obj))
-       (or (equal? "_:" (substring (->string (car obj)) 0 2))
-           (equal? (car obj) '@Blank))))
+       ;;(or (equal? "_:" (substring (->string (car obj)) 0 2))
+       (equal? (car obj) '@Blank)))
 
 (define (blank-node-path? obj)
   (and (list? obj)
@@ -160,215 +160,217 @@
     (and (string-prefix? "<" s)
          (string-suffix? ">" s))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Writing Sparql
-(define (write-uri uri)
-  (let ((str (symbol->string uri)))
-    (substring str 1 (- (string-length str) 1))))
-
-;; leftover?
-(define (write-expand-namespace ns-pair #!optional (namespaces (*namespaces*)))
-  (if (s-iri? ns-pair)
-      (write-uri ns-pair)
-      (expand-namespace* ns-pair namespaces)))
-
-(define (expand-namespace* ns-pair namespaces)
-  (let ((pair (string-split (->string ns-pair) ":")))
-    (format #f "~A~A"
-            (lookup-namespace (string->symbol (car pair)) namespaces)
-            (cadr pair))))
-
-(define (expand-namespace ns-pair #!optional (namespaces (*namespaces*)))
-  (if (or (sparql-variable? ns-pair)  (s-iri? ns-pair))
-      ns-pair
-      (string->symbol
-       (format #f "<~A>" (expand-namespace* ns-pair namespaces)))))               
-
-(define (rdf->json exp)
-  (cond ((symbol? exp) (write-uri exp))
-	(else exp)))
-
-(define (value exp)
-  (cond ((symbol? exp)
-         (let ((s (symbol->string exp)))
-           (if (string-contains s "://")
-               (substring s 1 (- (string-length s) 1))
-               s)))
-        ((typed-or-langtag-literal? exp) (car exp))
-        (else exp)))
-
-(define (write-sparql-typed-literal exp)
-  (and (typed-or-langtag-literal? exp) 
-       (if (langtag? (cdr exp))
-           (format #f "\"~A\"~A" (car exp) (cdr exp))
-           (format #f "\"~A\"^^~A" (car exp) (cdr exp)))))
-
-;; replace write-sparql with write-sparql-element
-(define (write-sparql-inverse-element exp)
-  (and (inverse-element? exp)
-       (format #f "~A~A" (car exp) (write-sparql (cadr exp)))))
-
-(define (write-sparql-element-path exp)
-  (and (element-path? exp)
-       (format #f "~A/~A" 
-               (write-sparql (cadr exp))
-               (write-sparql (caddr exp)))))
-
-(define (write-sparql-modified-path exp)
-  (and (modified-path? exp)
-       (format #f "~A~A" (write-sparql (cadr exp)) (car exp))))
-
-(define (write-sparql-negated-set exp)
-  (and (negated-set? exp)
-       (format #f "!~A" (write-sparql (cadr exp)))))
-
-(define (write-sparql-alternative-path exp)
-  (and (alternative-path? exp)
-       (string-join
-        (map write-sparql (cdr exp))
-        "|")))
-
-(define (write-sparql-path exp)
-  (or
-   (write-sparql-element-path exp)
-   (write-sparql-modified-path exp)
-   (write-sparql-inverse-element exp)
-   (write-sparql-negated-set exp)
-   (write-sparql-alternative-path exp)))
-
-(define (write-sparql-element exp)
-  (cond ((string? exp) (conc "\"" exp "\""))
-        ((keyword? exp) (keyword->string exp))
-        ((number? exp) (number->string exp))
-        ((symbol? exp) (symbol->string exp))
-        ((boolean? exp) (if exp "true" "false"))
-        ((pair? exp) (or (write-sparql-typed-literal exp)
-                         (write-sparql-path exp)))))
-
-(define (write-sparql exp #!optional (level 0))
-  ;; (cond ((string? exp) (conc "\"" exp "\""))
-  ;;       ((keyword? exp) (keyword->string exp))
-  ;;       ((number? exp) (number->string exp))
-  ;;       ((symbol? exp) (symbol->string exp))
-  ;;       ((boolean? exp) (if exp "true" "false"))
-  ;;       ((pair? exp)
-         (or (write-sparql-element exp)
-             (write-sparql-special exp)
-             (string-join (map (cut write-sparql <> (+ level 1))
-                               exp)
-                          " ")))
 
 
-(define functions '(COUNT SUM MIN MAX AVG SAMPLE STR LANG LANGMATCHES 
-                          DATATYPE BOUND IRI URI BNODE RAND NIL ABS CEIL FLOOR ROUND IF
-                          CONCAT STRLEN UCASE LCASE ENCODE_FOR_URI CONTAINS STRSTARTS
-                          STRENDS STRBEFORE STRAFTER YEAR MONTH DAY HOURS MINUTES SECONDS 
-                          TIMEZONE TZ NOW NIL UUID NIL STRUUID NIL MD5 SHA1 SHA256 SHA384
-                          SHA512 COALESCE  STRLANG STRDT isIRI isURI isBLANK isLITERAL isNUMERIC
-                          REGEX SUBSTR REPLACE EXISTS))
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ;; Writing Sparql
+;; (define (write-uri uri)
+;;   (let ((str (symbol->string uri)))
+;;     (substring str 1 (- (string-length str) 1))))
 
-(define (write-sparql-function exp)
-  (and (member (car exp) functions)
-       (format #f "~A(~A)"
-               (car exp)
-               (string-join 
-                (map write-sparql (cdr exp))
-                ", "))))               
+;; ;; leftover?
+;; (define (write-expand-namespace ns-pair #!optional (namespaces (*namespaces*)))
+;;   (if (s-iri? ns-pair)
+;;       (write-uri ns-pair)
+;;       (expand-namespace* ns-pair namespaces)))
 
-(define binary-operators '(+ - * / = != <= >= < >))
+;; (define (expand-namespace* ns-pair namespaces)
+;;   (let ((pair (string-split (->string ns-pair) ":")))
+;;     (format #f "~A~A"
+;;             (lookup-namespace (string->symbol (car pair)) namespaces)
+;;             (cadr pair))))
 
-(define (write-sparql-binary exp)
-  (and (member (car exp) binary-operators)
-       (format #f "~A ~A ~A"
-               (cadr exp)
-               (car exp)
-               (caddr exp))))          
+;; (define (expand-namespace ns-pair #!optional (namespaces (*namespaces*)))
+;;   (if (or (sparql-variable? ns-pair)  (s-iri? ns-pair))
+;;       ns-pair
+;;       (string->symbol
+;;        (format #f "<~A>" (expand-namespace* ns-pair namespaces)))))               
 
-(define (write-sparql-special exp #!optional (level 0))
-  (let ((pre (apply conc (make-list level " "))))
-    (or (write-sparql-function exp)
-        (write-sparql-binary exp)
-        (case (car exp)
-          ((@Unit) (string-join (map write-sparql (cdr exp)) ";\n"))
-          ((@Prologue @Query) (conc (string-join (map write-sparql (cdr exp)) "\n") "\n"))
-          ((@Update) (conc (string-join (map write-sparql (cdr exp)) "\n") "\n"))
-          ((@Dataset @Using) (string-join (map write-sparql (cdr exp)) "\n"))
+;; (define (rdf->json exp)
+;;   (cond ((symbol? exp) (write-uri exp))
+;; 	(else exp)))
 
-	  ;; arglist, collections (list?) in ()
+;; (define (value exp)
+;;   (cond ((symbol? exp)
+;;          (let ((s (symbol->string exp)))
+;;            (if (string-contains s "://")
+;;                (substring s 1 (- (string-length s) 1))
+;;                s)))
+;;         ((typed-or-langtag-literal? exp) (car exp))
+;;         (else exp)))
 
-          ((@Blank) (format #f "[ ~A ]"
-                           (string-join
-                            (map write-triple-properties (cdr exp)) 
-                            " ")))
-	  ((@SubSelect) (format #f "~A~A ~A"
-				pre (write-sparql (second exp)) (write-sparql (third exp))))
-          ((SELECT |SELECT DISTINCT| |SELECT REDUCED|)
-           (format #f "~A~A ~A"
-                   pre (car exp)
-                   (string-join (map write-sparql (cdr exp)) " ")))
-          ((UNION)     
-           (conc pre
-                 (string-join  (map (cut write-triple <> (+ level 1)) (cdr exp))
-                               (format #f "~%~AUNION " pre))))
-          ((GRAPH) (format #f "~AGRAPH ~A ~A  "
-                           pre (write-sparql (cadr exp))
-                           (write-triple (cddr exp) (+ level 1))))
-          ((WHERE MINUS OPTIONAL DELETE INSERT
-                  |DELETE WHERE| |DELETE DATA| |INSERT DATA|
-                  CONSTRUCT)
-           (format #f "~A~A ~A" pre (car exp) (write-triple (cdr exp) (+ level 1))))
-          ((BIND FILTER) (format #f "~A~A ~A"
-                          pre (car exp) (string-join (map write-sparql (cdr exp)) " ")))
-          ((AS) (format #f "(~A AS ~A)"
-                        (write-sparql (cadr exp))
-                        (write-sparql (caddr exp))))
-          ((VALUES) (format #f "~AVALUES ~A { ~A }"
-                            pre (write-sparql (cadr exp)) (write-sparql (caddr exp))))
-          (else #f)))))
+;; (define (write-sparql-typed-literal exp)
+;;   (and (typed-or-langtag-literal? exp) 
+;;        (if (langtag? (cdr exp))
+;;            (format #f "\"~A\"~A" (car exp) (cdr exp))
+;;            (format #f "\"~A\"^^~A" (car exp) (cdr exp)))))
+
+;; ;; replace write-sparql with write-sparql-element
+;; (define (write-sparql-inverse-element exp)
+;;   (and (inverse-element? exp)
+;;        (format #f "~A~A" (car exp) (write-sparql (cadr exp)))))
+
+;; (define (write-sparql-element-path exp)
+;;   (and (element-path? exp)
+;;        (format #f "~A/~A" 
+;;                (write-sparql (cadr exp))
+;;                (write-sparql (caddr exp)))))
+
+;; (define (write-sparql-modified-path exp)
+;;   (and (modified-path? exp)
+;;        (format #f "~A~A" (write-sparql (cadr exp)) (car exp))))
+
+;; (define (write-sparql-negated-set exp)
+;;   (and (negated-set? exp)
+;;        (format #f "!~A" (write-sparql (cadr exp)))))
+
+;; (define (write-sparql-alternative-path exp)
+;;   (and (alternative-path? exp)
+;;        (string-join
+;;         (map write-sparql (cdr exp))
+;;         "|")))
+
+;; (define (write-sparql-path exp)
+;;   (or
+;;    (write-sparql-element-path exp)
+;;    (write-sparql-modified-path exp)
+;;    (write-sparql-inverse-element exp)
+;;    (write-sparql-negated-set exp)
+;;    (write-sparql-alternative-path exp)))
+
+;; (define (write-sparql-element exp)
+;;   (cond ((string? exp) (conc "\"" exp "\""))
+;;         ((keyword? exp) (keyword->string exp))
+;;         ((number? exp) (number->string exp))
+;;         ((symbol? exp) (symbol->string exp))
+;;         ((boolean? exp) (if exp "true" "false"))
+;;         ((pair? exp) (or (write-sparql-typed-literal exp)
+;;                          (write-sparql-path exp)))))
+
+;; (define (write-sparql exp #!optional (level 0))
+;;   ;; (cond ((string? exp) (conc "\"" exp "\""))
+;;   ;;       ((keyword? exp) (keyword->string exp))
+;;   ;;       ((number? exp) (number->string exp))
+;;   ;;       ((symbol? exp) (symbol->string exp))
+;;   ;;       ((boolean? exp) (if exp "true" "false"))
+;;   ;;       ((pair? exp)
+;;          (or (write-sparql-element exp)
+;;              (write-sparql-special exp)
+;;              (string-join (map (cut write-sparql <> (+ level 1))
+;;                                exp)
+;;                           " ")))
+
+
+;; (define functions '(COUNT SUM MIN MAX AVG SAMPLE STR LANG LANGMATCHES 
+;;                           DATATYPE BOUND IRI URI BNODE RAND NIL ABS CEIL FLOOR ROUND IF
+;;                           CONCAT STRLEN UCASE LCASE ENCODE_FOR_URI CONTAINS STRSTARTS
+;;                           STRENDS STRBEFORE STRAFTER YEAR MONTH DAY HOURS MINUTES SECONDS 
+;;                           TIMEZONE TZ NOW NIL UUID NIL STRUUID NIL MD5 SHA1 SHA256 SHA384
+;;                           SHA512 COALESCE  STRLANG STRDT isIRI isURI isBLANK isLITERAL isNUMERIC
+;;                           REGEX SUBSTR REPLACE EXISTS))
+
+;; (define (write-sparql-function exp)
+;;   (and (member (car exp) functions)
+;;        (format #f "~A(~A)"
+;;                (car exp)
+;;                (string-join 
+;;                 (map write-sparql (cdr exp))
+;;                 ", "))))               
+
+;; (define binary-operators '(+ - * / = != <= >= < >))
+
+;; (define (write-sparql-binary exp)
+;;   (and (member (car exp) binary-operators)
+;;        (format #f "~A ~A ~A"
+;;                (cadr exp)
+;;                (car exp)
+;;                (caddr exp))))          
+
+;; (define (write-sparql-special exp #!optional (level 0))
+;;   (let ((pre (apply conc (make-list level " "))))
+;;     (or (write-sparql-function exp)
+;;         (write-sparql-binary exp)
+;;         (case (car exp)
+;;           ((@Unit) (string-join (map write-sparql (cdr exp)) ";\n"))
+;;           ((@Prologue @Query) (conc (string-join (map write-sparql (cdr exp)) "\n") "\n"))
+;;           ((@Update) (conc (string-join (map write-sparql (cdr exp)) "\n") "\n"))
+;;           ((@Dataset @Using) (string-join (map write-sparql (cdr exp)) "\n"))
+
+;; 	  ;; arglist, collections (list?) in ()
+
+;;           ((@Blank) (format #f "[ ~A ]"
+;;                            (string-join
+;;                             (map write-triple-properties (cdr exp)) 
+;;                             " ")))
+;; 	  ((@SubSelect) (format #f "~A~A ~A"
+;; 				pre (write-sparql (second exp)) (write-sparql (third exp))))
+;;           ((SELECT |SELECT DISTINCT| |SELECT REDUCED|)
+;;            (format #f "~A~A ~A"
+;;                    pre (car exp)
+;;                    (string-join (map write-sparql (cdr exp)) " ")))
+;;           ((UNION)     
+;;            (conc pre
+;;                  (string-join  (map (cut write-triple <> (+ level 1)) (cdr exp))
+;;                                (format #f "~%~AUNION " pre))))
+;;           ((GRAPH) (format #f "~AGRAPH ~A ~A  "
+;;                            pre (write-sparql (cadr exp))
+;;                            (write-triple (cddr exp) (+ level 1))))
+;;           ((WHERE MINUS OPTIONAL DELETE INSERT
+;;                   |DELETE WHERE| |DELETE DATA| |INSERT DATA|
+;;                   CONSTRUCT)
+;;            (format #f "~A~A ~A" pre (car exp) (write-triple (cdr exp) (+ level 1))))
+;;           ((BIND FILTER) (format #f "~A~A ~A"
+;;                           pre (car exp) (string-join (map write-sparql (cdr exp)) " ")))
+;;           ((AS) (format #f "(~A AS ~A)"
+;;                         (write-sparql (cadr exp))
+;;                         (write-sparql (caddr exp))))
+;;           ((VALUES) (format #f "~AVALUES ~A { ~A }"
+;;                             pre (write-sparql (cadr exp)) (write-sparql (caddr exp))))
+;;           (else #f)))))
   
-(define (write-triple triple #!optional (level 0))
-  (if (null? triple)
-      "{}"
-      (or (write-sparql-special triple level)
-          (let ((pre (apply conc (make-list level " "))))
-             ;; list of triples
-            (if (pair? (car triple))
-                (format #f "{~%~A~%~A}"
-                        (string-join 
-                         (map (cut write-triple <> (+ level 1)) triple) "\n")
-                        pre)
-                (conc
-                 pre
-                 (string-join
-                  (match triple
-                    ((subject properties) 
-                     (list (write-sparql subject)
-                           (write-triple-properties properties)))
-                    ((subject predicate objects)
-                     (list (write-sparql subject)
-                           (write-triple-properties predicate)
-                           (write-triple-objects objects)))))
-                 "."))))))
+;; (define (write-triple triple #!optional (level 0))
+;;   (if (null? triple)
+;;       "{}"
+;;       (or (write-sparql-special triple level)
+;;           (let ((pre (apply conc (make-list level " "))))
+;;              ;; list of triples
+;;             (if (pair? (car triple))
+;;                 (format #f "{~%~A~%~A}"
+;;                         (string-join 
+;;                          (map (cut write-triple <> (+ level 1)) triple) "\n")
+;;                         pre)
+;;                 (conc
+;;                  pre
+;;                  (string-join
+;;                   (match triple
+;;                     ((subject properties) 
+;;                      (list (write-sparql subject)
+;;                            (write-triple-properties properties)))
+;;                     ((subject predicate objects)
+;;                      (list (write-sparql subject)
+;;                            (write-triple-properties predicate)
+;;                            (write-triple-objects objects)))))
+;;                  "."))))))
 
-(define (write-triple-properties exp)
-  (let ((W (lambda (property)
-             (format #f "~A ~A"
-                     (write-triple-properties (car property))
-                     (write-triple-objects (cadr property))))))
-  (or (write-sparql-path exp)                         
-      (if (pair? exp)
-          (string-join (map W exp) ";  ")
-          (write-sparql exp)))))
+;; (define (write-triple-properties exp)
+;;   (let ((W (lambda (property)
+;;              (format #f "~A ~A"
+;;                      (write-triple-properties (car property))
+;;                      (write-triple-objects (cadr property))))))
+;;   (or (write-sparql-path exp)                         
+;;       (if (pair? exp)
+;;           (string-join (map W exp) ";  ")
+;;           (write-sparql exp)))))
 
-(define (write-triple-objects exp)
-  (if (pair? exp)
-      (or (write-sparql-typed-literal exp)
-	  (write-sparql-special exp)
-          (string-join (map (lambda (y) (write-sparql y)) exp) ", "))
-      (write-sparql exp)))
+;; (define (write-triple-objects exp)
+;;   (if (pair? exp)
+;;       (or (write-sparql-typed-literal exp)
+;; 	  (write-sparql-special exp)
+;;           (string-join (map (lambda (y) (write-sparql y)) exp) ", "))
+;;       (write-sparql exp)))
 
-(define (write-triples triples)
-  (string-join (map s-triple triples) "\n"))
+;; (define (write-triples triples)
+;;   (string-join (map s-triple triples) "\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Expand RDF triples
@@ -458,6 +460,9 @@
 ;;                    objects))
 ;;              (expand-expanded-triple subject predicate objects))))))
 
+(include "s-sparql-transform.scm")
+(include "s-sparql-writer.scm")
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Convenience Functions
 (define (s-triple triple)
@@ -535,5 +540,4 @@
           (format #f "WHERE {~% ~A ~%}~%" where))))
 
 
-(include "s-sparql-transform.scm")
 )

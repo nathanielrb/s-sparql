@@ -1,5 +1,3 @@
-(use s-sparql s-sparql-parser matchable)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Writing Sparql
 (define (write-uri uri)
@@ -85,10 +83,14 @@
         ((pair? exp) (or (write-sparql-typed-literal exp)
                          (write-sparql-path exp)))))
 
-(define functions '(COUNT SUM MIN MAX AVG SAMPLE STR LANG LANGMATCHES DATATYPE BOUND IRI URI BNODE RAND NIL ABS CEIL FLOOR ROUND IF CONCAT STRLEN UCASE LCASE ENCODE_FOR_URI CONTAINS STRSTARTS STRENDS STRBEFORE STRAFTER YEAR MONTH DAY HOURS MINUTES SECONDS TIMEZONE TZ NOW NIL UUID NIL STRUUID NIL MD5 SHA1 SHA256 SHA384 SHA512 COALESCE  STRLANG STRDT isIRI isURI isBLANK isLITERAL isNUMERIC REGEX SUBSTR REPLACE EXISTS))
+(define aggregates
+  '(COUNT SUM MIN MAX AVG SAMPLE GROUP_CONCAT))
+
+(define functions
+  '(STR LANG LANGMATCHES DATATYPE BOUND IRI URI BNODE RAND NIL ABS CEIL FLOOR ROUND IF CONCAT STRLEN UCASE LCASE ENCODE_FOR_URI CONTAINS STRSTARTS STRENDS STRBEFORE STRAFTER YEAR MONTH DAY HOURS MINUTES SECONDS TIMEZONE TZ NOW NIL UUID NIL STRUUID NIL MD5 SHA1 SHA256 SHA384 SHA512 COALESCE  STRLANG STRDT isIRI isURI isBLANK isLITERAL isNUMERIC REGEX SUBSTR REPLACE EXISTS))
 
 (define (write-sparql-function exp)
-  (and (member (car exp) functions)
+  (and (member (car exp) (append functions aggregates))
        (format #f "~A(~A)"
                (car exp)
                (string-join 
@@ -126,7 +128,6 @@
    (string-join ;; useful?
     (match triple
       (((`@Blank . properties))
-       (print "blank" triple)
        (list (write-sparql-blank-node (car triple))))
 	
       ((subject properties) 
@@ -258,9 +259,16 @@
     ((|@()|) . ,(lambda (block bindings)
 		  (values (format "(~A)" (swrite (cdr block) (sep " " bindings)))
 			  bindings)))
-    (,functions . ,(lambda (block bindings)
-		     (values (format "~A(~A)" (car block) (swrite (cdr block) (zero (sep "," bindings))))
-			     bindings)))
+    (,functions
+     . ,(lambda (block bindings)
+          (values (format "~A(~A)" (car block) (swrite (cdr block) (zero (sep "," bindings))))
+                  bindings)))
+    (,aggregates ;; GROUP_CONCAT needs special treatment
+     . ,(lambda (block bindings)
+          (values
+           (format "~A(~A)" (car block)
+                   (swrite (cdr block) (zero (sep " " bindings))))
+           bindings)))
     ((WHERE
       DELETE |DELETE WHERE| |DELETE DATA|
       INSERT |INSERT WHERE| |INSERT DATA|
@@ -290,9 +298,10 @@
     (,triple? 
      . ,(lambda (triple bindings)
 	  (values (write-triple triple) '())))
-    ((LIMIT OFFSET |GROUP BY|) . ,(lambda (block bindings)
-			 (values (format "~A ~A" (car block) (swrite (cdr block) (zero (nobreak (sep " " bindings)))))
-				 bindings)))
+    ((LIMIT OFFSET |GROUP BY|)
+     . ,(lambda (block bindings)
+          (values (format "~A ~A" (car block) (swrite (cdr block) (zero (nobreak (sep " " bindings)))))
+                  bindings)))
     (,list? 
      . ,(lambda (block bindings)
 	  (values (format "{~A~%~A}" 
@@ -305,15 +314,18 @@
 (define (write-sparql exp)
   (swrite (list exp) '() srules))
 
-(define t1 (parse-query "SELECT ?s WHERE { SELECT ?s WHERE { ?s ?p ?o } }"))
-(define t2 (parse-query "SELECT ?s WHERE { { SELECT ?p WHERE { ?s ?p ?o } } }"))
-(define t3 (parse-query "SELECT ?s WHERE { GRAPH <G> { ?s ?p ?o. ?a ?b ?d, ?e } }"))
-(define t4 (parse-query "SELECT ?s ?p WHERE { { ?s ?p ?o } UNION { ?s ?p ?u } }"))
-(define t5 (parse-query "SELECT ((COUNT(?a) + 4) AS ?count) WHERE { { ?s ?p ?o } UNION { ?s ?p ?u } }"))
-(define t6 (parse-query "SELECT (COUNT(?a) AS ?count) WHERE { { ?s ?p ?o } UNION { ?s ?p ?u } }"))
-(define t7 (parse-query "SELECT ?s WHERE { ?s ?p ?o. [] ?x ?a, ?b; ?u ?v.  }"))
-(define t8 (parse-query "SELECT ?s WHERE { ?s ?p ?o. [?l ?m] }"))
-(define t9 (parse-query "SELECT ?s WHERE { ?s ?p [?l ?m] }"))
+(define (write-triples triples)
+  (string-join (map write-triple triples) "\n"))
+
+;; (define t1 (parse-query "SELECT ?s WHERE { SELECT ?s WHERE { ?s ?p ?o } }"))
+;; (define t2 (parse-query "SELECT ?s WHERE { { SELECT ?p WHERE { ?s ?p ?o } } }"))
+;; (define t3 (parse-query "SELECT ?s WHERE { GRAPH <G> { ?s ?p ?o. ?a ?b ?d, ?e } }"))
+;; (define t4 (parse-query "SELECT ?s ?p WHERE { { ?s ?p ?o } UNION { ?s ?p ?u } }"))
+;; (define t5 (parse-query "SELECT ((COUNT(?a) + 4) AS ?count) WHERE { { ?s ?p ?o } UNION { ?s ?p ?u } }"))
+;; (define t6 (parse-query "SELECT (COUNT(?a) AS ?count) WHERE { { ?s ?p ?o } UNION { ?s ?p ?u } }"))
+;; (define t7 (parse-query "SELECT ?s WHERE { ?s ?p ?o. [] ?x ?a, ?b; ?u ?v.  }"))
+;; (define t8 (parse-query "SELECT ?s WHERE { ?s ?p ?o. [?l ?m] }"))
+;; (define t9 (parse-query "SELECT ?s WHERE { ?s ?p [?l ?m] }"))
 ;; (define (write-sparql-special exp #!optional (level 0))
 ;;   (let ((pre (apply conc (make-list level " "))))
 ;;     (or (write-sparql-function exp)
