@@ -836,7 +836,7 @@
     (:?
      (::
       (drop-consumed (lit/sp "."))
-      ConstructTriples)))))
+      (:? ConstructTriples))))))
 
 (define ConstructTemplate
   (::
