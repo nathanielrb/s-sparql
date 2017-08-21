@@ -269,7 +269,7 @@
            (format "~A(~A)" (car block)
                    (swrite (cdr block) (zero (sep " " bindings))))
            bindings)))
-    ((WHERE
+    ((CONSTRUCT WHERE
       DELETE |DELETE WHERE| |DELETE DATA|
       INSERT |INSERT WHERE| |INSERT DATA|
       MINUS OPTIONAL)
