@@ -58,7 +58,7 @@
       (and (keyword? exp) (keyword->string exp))
       (and (number? exp) (number->string exp))
       (and (symbol? exp) (symbol->string exp))
-      (and (list? exp) (string-join (map sparql-escape exp) joint))
+      (and (list? exp) (string-join (map sparql-escape-literal exp) joint))
       (and (pair? exp)
            (if (langtag? (cdr exp))
                (format "~A~A" (sparql-escape-literal (car exp)) (cdr exp))
