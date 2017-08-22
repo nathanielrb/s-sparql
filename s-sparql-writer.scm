@@ -168,8 +168,9 @@
 		  (conc a
 			(if (equal? a "") ""
 			    (get-binding/default 'separator bindings ""))
-			(if (get-binding 'linebreak bindings) "\n" "")
-			(pre bindings)
+			(if (get-binding 'linebreak bindings) 
+                            (conc "\n" (pre bindings))
+                            "")
 			b))))))
     (rewrite* block bindings rules cj  "")))
 
@@ -274,10 +275,10 @@
       INSERT |INSERT WHERE| |INSERT DATA|
       MINUS OPTIONAL)
      . ,(lambda (block bindings)
-	  (values (format "~A~A" 
+	  (values (format "~A ~A" 
 			  ;;(pre bindings)
 			  (car block)
-			  (swrite (list (cdr block)) (linebreak bindings))
+			  (swrite (list (cdr block)) (nobreak bindings))
 			  ;;(pre bindings))
 			  )
 		  bindings)))
@@ -285,7 +286,7 @@
      . ,(lambda (block bindings)
 	  (values (format "GRAPH ~A ~A"
 			  (second block)
-			  (swrite (list (cddr block)) (linebreak bindings)))
+			  (swrite (list (cddr block)) (nobreak bindings)))
 		  bindings)))
     ((UNION)
      . ,(lambda (block bindings)
@@ -300,7 +301,7 @@
 	  (values (write-triple triple) '())))
     ((LIMIT OFFSET |GROUP BY|)
      . ,(lambda (block bindings)
-          (values (format "~A ~A" (car block) (swrite (cdr block) (zero (nobreak (sep " " bindings)))))
+          (values (format "~A ~A" (car block) (swrite (cdr block) (nobreak (sep " " bindings))))
                   bindings)))
     (,list? 
      . ,(lambda (block bindings)
@@ -308,8 +309,6 @@
 			 (swrite block (inc (linebreak bindings)))
 			 (pre bindings))
 		  bindings)))))
-;;    ((@Blank) . ,(lambda (block bindings)
-;; VALUES
 
 (define (write-sparql exp)
   (swrite (list exp) '() srules))
