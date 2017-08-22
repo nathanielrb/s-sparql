@@ -4,14 +4,6 @@
 ;; Example:
 ;; https://code.call-cc.org/svn/chicken-eggs/release/4/json-abnf/trunk/json-abnf.scm
 
-(module s-sparql-parser *
-(import chicken scheme extras data-structures srfi-1) 
-
-(use srfi-1 srfi-13 matchable irregex)
-
-(require-extension typeclass input-classes abnf abnf-charlist abnf-consumers
-                   lexgen)
-
 (define char-list-<Input>
   (make-<Input> null? car cdr))
 
@@ -1377,5 +1369,3 @@
 
 ;; (define (unit-update-insert QueryUnit)
 ;;   (assoc-when 'INSERT (unit-update QueryUnit)))
-
-)

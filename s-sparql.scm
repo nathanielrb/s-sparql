@@ -4,6 +4,10 @@
 (use sparql-query
      srfi-13 srfi-69 http-client intarweb uri-common medea cjson matchable irregex)
 
+
+(require-extension typeclass input-classes abnf abnf-charlist abnf-consumers
+                   lexgen)
+
 (reexport sparql-query)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -462,9 +466,11 @@
 
 (include "s-sparql-transform.scm")
 (include "s-sparql-writer.scm")
+(include "s-sparql-parser.scm")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Convenience Functions
+;; To be deprecated soon
 (define (s-triple triple)
   (if (string? triple)
       triple

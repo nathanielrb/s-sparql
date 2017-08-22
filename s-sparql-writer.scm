@@ -247,7 +247,7 @@
 (define srules
   `((,symbol? . ,sw/literal)
     (,number? . ,sw/literal)
-    ((@QueryUnit @UpdateUnit @Query @Update @SubSelect @Prologue) . ,sw/obj)
+    ((@QueryUnit @UpdateUnit @Query @Update @SubSelect @Prologue) . ,sw/obj) ;; (sep "\n"
     ((@Dataset @Using) . ,sw/obj)
     ((PREFIX) . ,sw/copy)
     ((SELECT |SELECT DISTINCT| |SELECT REDUCED|)
