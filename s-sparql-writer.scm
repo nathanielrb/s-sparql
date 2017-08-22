@@ -292,9 +292,9 @@
      . ,(lambda (block bindings)
 	  (values (string-join (map
 				(lambda (b)
-				  (swrite (list b) (linebreak bindings)))
+				  (swrite (list b) (nobreak bindings)))
 				(cdr block)) 
-			       (format "~%~AUNION" (pre bindings)))
+			       (format "~%~AUNION " (pre bindings)))
 		  bindings)))
     (,triple? 
      . ,(lambda (triple bindings)
