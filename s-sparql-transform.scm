@@ -351,11 +351,16 @@
       (let loop ((new-bindings new-bindings) (merged-bindings bindings))
         (if (null? new-bindings) merged-bindings
             (let* ((new-binding (car new-bindings)))
+              (if (equal? (car new-binding) '@bindings)
+                  (loop (cdr new-bindings)
+                        (alist-update (car new-binding)
+                                      (cdr new-binding)
+                                      merged-bindings))
               (loop (cdr new-bindings)
                     (alist-update (car new-binding)
                                   (merge-bindings (cdr new-binding)
                                                   (or (alist-ref (car new-binding) bindings) '()))
-                                  merged-bindings)))))
+                                  merged-bindings))))))
       new-bindings))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
