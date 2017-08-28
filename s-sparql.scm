@@ -15,8 +15,14 @@
 (define (car-when p)
   (and (pair? p) (car p)))
 
+(define (car-or p default)
+  (if (pair? p) (car p) default))
+
 (define (cdr-when p)
   (and (pair? p) (cdr p)))
+
+(define (cdr-or p default)
+  (if (pair? p) (cdr p) default))
 
 (define (cons-when exp p)
   (if exp (cons exp p) p))
