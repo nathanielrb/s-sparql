@@ -400,7 +400,12 @@
 
 (define NotExistsFunc
   (vac
-   (:: (lit/sym "NOT") (lit/sym "EXISTS") GroupGraphPattern)))
+  (->list
+   (::
+    (bind-consumed->symbol
+     (:: (lit/sp "NOT ")
+         (lit/sp "EXISTS")))
+    GroupGraphPattern))))
 
 (define ExistsFunc
   (vac
@@ -913,13 +918,17 @@
   (::
    Var
    (drop-consumed (lit/sp "{"))
-   (:* DataBlockValue)
+   (:* (between-fws DataBlockValue))
    (drop-consumed (lit/sp "}"))))
 
 (define DataBlock
   (alternatives InlineDataOneVar InlineDataFull))
 
-;; InlineData
+(define InlineData
+  (->list
+   (::
+    (lit/sym "VALUES")
+    DataBlock)))
 
 ;; bug - BIND( ?a + ?b AS ?c) is not parsed into polish notation
 (define Bind
@@ -957,7 +966,8 @@
                 GraphGraphPattern
                 ;;ServiceGraphPattern
                 Filter
-                Bind ;; InlineData
+                Bind 
+                InlineData
                 ))
 
 (define TriplesBlock
@@ -1275,8 +1285,9 @@
    '@SubSelect
    (:: 
     (->list SelectClause)
-    (->list WhereClause))
-       ;; SolutionModifier ValuesClause
+    (->list WhereClause)
+    SolutionModifier
+    ValuesClause)
    ))
 
 (define SelectQuery

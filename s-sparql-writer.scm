@@ -272,8 +272,8 @@
            bindings)))
     ((CONSTRUCT WHERE
       DELETE |DELETE WHERE| |DELETE DATA|
-      INSERT |INSERT WHERE| |INSERT DATA|
-      MINUS OPTIONAL)
+      INSERT |INSERT WHERE| |INSERT DATA|      
+      |NOT EXISTS| MINUS OPTIONAL)
      . ,(lambda (block bindings)
 	  (values (format "~A ~A" 
 			  ;;(pre bindings)
@@ -299,6 +299,21 @@
     (,triple? 
      . ,(lambda (triple bindings)
 	  (values (write-triple triple) '())))
+    ((FILTER) 
+     . ,(lambda (block bindings)
+          (values (format "FILTER ~A" (swrite (cdr block) bindings))
+                  bindings)))
+    ((VALUES)
+     . ,(lambda (block bindings)
+          (let ((paren-if (lambda (elt) (if (pair? elt) (format "(~A)" (string-join (map ->string elt))) (->string elt)))))
+            (match block
+              ((`VALUES vars . vals)
+               (values
+                (format "VALUES ~A { ~A }"
+                        (paren-if vars)
+                        (string-join
+                         (map paren-if vals)))
+                bindings))))))
     ((LIMIT OFFSET |GROUP BY|)
      . ,(lambda (block bindings)
           (values (format "~A ~A" (car block) (swrite (cdr block) (nobreak (sep " " bindings))))
