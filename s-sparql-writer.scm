@@ -97,7 +97,7 @@
                 (map write-sparql (cdr exp))
                 ", "))))               
 
-(define binary-operators '(+ - * / = != <= >= < >))
+(define binary-operators '(+ - * / = != <= >= < > IN |NOT IN| && |||| ))
 
 (define (write-sparql-binary exp)
   (and (member (car exp) binary-operators)
@@ -301,8 +301,16 @@
 	  (values (write-triple triple) '())))
     ((FILTER) 
      . ,(lambda (block bindings)
-          (values (format "FILTER ~A" (swrite (cdr block) bindings))
+          (values (format "FILTER ~A" (swrite (cdr block) (nobreak bindings)))
                   bindings)))
+    (,binary-operators
+     . ,(lambda (block bindings)
+          (values (format "(~A ~A ~A)"
+                          (swrite (list (second block)) (nobreak bindings))
+                          (first block)
+                          (swrite (list (third block)) (nobreak bindings)))
+                  bindings)))
+    ;; cons-pairs types/langtag
     ((VALUES)
      . ,(lambda (block bindings)
           (let ((paren-if (lambda (elt) (if (pair? elt) (format "(~A)" (string-join (map ->string elt))) (->string elt)))))

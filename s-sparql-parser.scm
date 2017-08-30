@@ -4,6 +4,16 @@
 ;; Example:
 ;; https://code.call-cc.org/svn/chicken-eggs/release/4/json-abnf/trunk/json-abnf.scm
 
+;; Questions
+;; - (|X DISTINCT| ..) or (X (DISTINCT ..)) ? (be consistent
+
+(use sparql-query
+     srfi-13 srfi-69 http-client intarweb uri-common medea cjson matchable irregex)
+
+
+(require-extension typeclass input-classes abnf abnf-charlist abnf-consumers
+                   lexgen)
+
 (define char-list-<Input>
   (make-<Input> null? car cdr))
 
@@ -48,11 +58,67 @@
     ((_ label p)      (bind (consumed-values->list label)  p))
     ))
 
+;; list if >1 children (abstract this & next 2)
+
+(define (list-if lst)
+  (and (pair? lst)
+       (pair? (car lst))
+       (let ((lst (car lst)))
+         (if (> (length lst) 1)
+             lst
+             (car lst)))))
+
+(define consumed-values->list-if
+  (consumed-pairs->list list-if))
+
+(define-syntax ->list-if
+  (syntax-rules () 
+    ((_ p)    (bind consumed-values->list-if  p))
+    ))
+
+;; node if >1 children
+
+(define (node-if lst)
+  (and (pair? lst)
+       (pair? (car lst))
+       (let ((lst (car lst)))
+         (if (> (length lst) 2)
+             lst
+             (second lst)))))
+
+(define consumed-values->node-if
+  (consumed-pairs->list node-if))
+
+(define-syntax ->node-if
+  (syntax-rules () 
+    ((_ p)    (bind consumed-values->node-if  p))
+    ))
+
+;; infix
+
+(define (infix-if lst)
+  (and (pair? lst)
+       (pair? (car lst))
+       (let ((lst (car lst)))
+         (cond ((= (length lst) 3)
+                (list (second lst) (first lst) (third lst)))
+               ((= (length lst) 2)
+                (list (second lst) (first lst)))
+               (else (car lst))))))
+
+(define consumed-values->infix-if
+  (consumed-pairs->list infix-if))
+
+(define-syntax ->infix-if
+  (syntax-rules () 
+    ((_ p)    (bind consumed-values->infix-if  p))
+    ))
+
+;; cons
+
 (define (2list->cons vals)
-  (print "Vals " vals)
   (and (list? vals)
          (= (length vals) 2)
-         (print (cons (car vals) (cadr vals)))
          (cons (car vals) (cadr vals))))
 
 (define-syntax ->cons
@@ -70,8 +136,7 @@
     ))
 
 ;; really buggy
-(define (rel->polish lst)
-  (print "Polish? " lst)
+(define (rel->prefix lst)
   (and (pair? lst)
        (pair? (car lst))
        (let ((lst (car lst)))  ;;(or (and (equal? (caar lst) '|@()|)
@@ -83,12 +148,12 @@
 
 ;; (define consumed-values (consumed-objects pair?))
 
-(define consumed-pairs->polish
-  (consumed-pairs->list rel->polish))
+(define consumed-pairs->prefix
+  (consumed-pairs->list rel->prefix))
 
-(define-syntax ->polish
+(define-syntax ->prefix
   (syntax-rules () 
-    ((_ p)    (bind consumed-pairs->polish p))
+    ((_ p)    (bind consumed-pairs->prefix p))
     ))
 
 (define fws
@@ -376,16 +441,17 @@
   (vac
    (bracketted-function 
     label
-;;    (->list
-     (::
-      (:? (lit/sym "DISTINCT")) 
-      content))))
+    (alternatives
+     (->list
+      (::
+       (lit/sym "DISTINCT")
+       content))
+     content))))
 
 (define Aggregate
   (vac
    (alternatives
-    (aggregate-expression
-     "COUNT" (alternatives (lit/sym "*")  Expression))
+    (aggregate-expression "COUNT" (alternatives (lit/sym "*")  Expression))
     (aggregate-expression "SUM" Expression)
     (aggregate-expression "MIN" Expression)
     (aggregate-expression "MAX" Expression)
@@ -502,61 +568,78 @@
 
 (define BrackettedExpression
   (vac
-   (->node
-    '|@()|
-    (::
-     (drop-consumed (lit/sp "("))
-     Expression
-     (drop-consumed (lit/sp ")"))))))
+   (::
+    (drop-consumed (lit/sp "("))
+    Expression
+    (drop-consumed (lit/sp ")")))))
 
 (define PrimaryExpression
   (vac
   (alternatives
+   NumericLiteral
+   BooleanLiteral
+   Var
+   RDFLiteral
    BrackettedExpression
-   BuiltInCall iriOrFunction RDFLiteral
-   NumericLiteral BooleanLiteral Var)))
+   BuiltInCall
+   iriOrFunction 
+   )))
 
-;; To Polish Notation!!
+;; To Prefix Notation!!
 (define UnaryExpression
+  (vac 
   (alternatives
    (:: (lit/sym "!") PrimaryExpression)
    (:: (lit/sym "+") PrimaryExpression)
    (:: (lit/sym "-") PrimaryExpression)
-   PrimaryExpression))
+   PrimaryExpression)))
 
-;; To Polish Notation!!
+;; To Prefix Notation!!
 (define MultiplicativeExpression
-  ;;(->polish
-   (::
-    UnaryExpression
-    (:*
-     (alternatives
-      (:: (lit/sym "*")
-          UnaryExpression)
-      (:: (lit/sym "/")
-          UnaryExpression)))))
+  (::
+   UnaryExpression
+   ;; (:*
+   ;;  (alternatives
+   ;;   (:: (lit/sym "*")
+   ;;       UnaryExpression)
+   ;;   (:: (lit/sym "/")
+   ;;       UnaryExpression)))))
+))
 
-;; To Polish Notation!!
+;; To Prefix Notation!!
 (define AdditiveExpression
-  ;;(->polish
-   (:: MultiplicativeExpression
-       (:*
-        (alternatives
-         (:: (lit/sym "+") MultiplicativeExpression)
-         (:: (lit/sym "-") MultiplicativeExpression)
-         (:: 
-          (alternatives  NumericLiteralPositive NumericLiteralNegative)
-          (:*
-           (alternatives
-            (:: (lit/sym "*") UnaryExpression)
-            (:: (lit/sym "/") UnaryExpression))))))))
+  (::
+   MultiplicativeExpression
+   ;;(:*
+   ;;  (alternatives
+   ;;   (:: (lit/sym "+") MultiplicativeExpression)
+   ;;   (:: (lit/sym "-") MultiplicativeExpression)
+   ;;   (:: 
+   ;;    (alternatives  NumericLiteralPositive NumericLiteralNegative)
+   ;;    (:*
+   ;;     (alternatives
+   ;;      (:: (lit/sym "*") UnaryExpression)
+   ;;      (:: (lit/sym "/") UnaryExpression))))))))
+))
 				
-(define NumericExpression AdditiveExpression)
+(define NumericExpression
+  (vac 
+ AdditiveExpression))
+
+(define (relexp label op a b)
+  (->node
+   label
+   (::
+    (between-fws a)
+    (::
+     (drop-consumed op)
+     (between-fws b)))))
 
 (define RelationalExpression 
   (vac
-   ;;(->polish
-    (:: 
+   (->infix-if
+    (->list
+     (:: 
       NumericExpression
       (:? 
        (alternatives
@@ -567,18 +650,52 @@
         (:: (lit/sym ">=") NumericExpression)
         (:: (lit/sym "<=") NumericExpression)
         (:: (lit/sym "IN") ExpressionList)
-        (:: (lit/sym "NOT") (lit/sym "IN") ExpressionList))))))
+        (:: (lit/sym "NOT") (lit/sym "IN") ExpressionList))))))))
+  ;; (vac 
+  ;;  (begin (print "RelationalExpression")
+  ;;  (alternatives
+
+  ;;   (relexp '= (lit/sp "=") NumericExpression NumericExpression)
+  ;;   (relexp '!= (lit/sp "!=") NumericExpression NumericExpression)
+  ;;   (relexp '< (lit/sp "<") NumericExpression NumericExpression)
+  ;;   (relexp '> (lit/sp ">") NumericExpression NumericExpression)
+  ;;   (relexp '<= (lit/sp "<=") NumericExpression NumericExpression)
+  ;;   (relexp '>= (lit/sp ">=") NumericExpression NumericExpression)
+  ;;   (relexp 'IN (lit/sp "IN")  NumericExpression ExpressionList)
+  ;;   (relexp '|NOT IN| (:: (lit/sp "NOT") (lit/sp "IN"))  NumericExpression ExpressionList)
+  ;;   NumericExpression
+  ;;   )))
 
 (define ValueLogical RelationalExpression)
 
 (define ConditionalAndExpression
-  (:: ValueLogical (:* (:: (lit/sym "&&") ValueLogical))))
+  (vac 
+   (->node-if
+    (->node
+     '&&
+     (:: 
+      ValueLogical
+      (:*
+       (::
+        (drop-consumed (lit/sp "&&"))
+        ValueLogical)))))))
 
 (define ConditionalOrExpression
-  (:: ConditionalAndExpression
-      (:* (:: (lit/sym "||") ConditionalAndExpression)))) ;; => Polish notation?
+  ;; (:: ConditionalAndExpression
+  ;;     (:* (:: (lit/sym "||") ConditionalAndExpression))))
+  (->node-if
+   (->node
+    '||
+    (:: 
+     ConditionalAndExpression
+     (:*
+      (::
+       (drop-consumed (lit/sp "||"))
+       ConditionalAndExpression))))))
 
-(define Expression ConditionalOrExpression)
+(define Expression
+  (vac 
+ ConditionalOrExpression))
   
 (define GraphTerm
    (alternatives
@@ -668,16 +785,15 @@
    (->list
     (::
      (drop-consumed (lit/sp "("))
-     (alternatives
+     (->node-if
       (->node
        '||
        (:: 
         PathOneInPropertySet
-        (:+
+        (:*
          (::
           (drop-consumed (lit/sp "|"))
-          PathOneInPropertySet))))
-      PathOneInPropertySet)
+          PathOneInPropertySet)))))
      (drop-consumed (lit/sp ")"))))))
 
 (define PathPrimary
@@ -714,47 +830,48 @@
       PathElt)))))
 
 (define PathElt
-  ;; (:: PathPrimary (:? PathMod)))
-  (alternatives
-   (->node '? (:: PathPrimary (drop-consumed (lit/sp "? "))))
-   (->node '+ (:: PathPrimary (drop-consumed (lit/sp "+ "))))
-   (->node '* (:: PathPrimary (drop-consumed (lit/sp "* "))))
-   PathPrimary))
+  (->infix-if
+   (->list
+    (:: PathPrimary
+        (:? PathMod)))))
 
 (define PathSequence
   (vac
-   (alternatives
+   (->node-if
     (->node 
      '/
      (:: 
       PathEltOrInverse
-      (drop-consumed (lit/sp "/"))
-      PathSequence))
-    PathEltOrInverse)))
+      (:*
+       (::
+        (drop-consumed (lit/sp "/"))
+        PathEltOrInverse)))))))
 
 (define PathAlternative
-  (alternatives
+;;  (alternatives
+  (->node-if
    (->node
     '||
     (:: PathSequence
-        (:+
+        (:*
          (::
           (drop-consumed (lit/sp "|"))
-          PathSequence))))
-   PathSequence))
+          PathSequence))))))
+;;   PathSequence))
 
 (define Path PathAlternative)
 
 (define ObjectPath GraphNodePath)
 
 (define	ObjectListPath
-  (alternatives
+;;  (alternatives
+  (->list-if
    (->list
     (:: ObjectPath
-	(:+
+	(:*
 	 (:: (drop-consumed (lit/sp ","))
-	     ObjectPath))))
-   ObjectPath))
+	     ObjectPath))))))
+;;   ObjectPath))
 
 (define VerbSimple Var)
 
@@ -762,24 +879,25 @@
 
 (define PropertyListPathNotEmpty
   (vac
-   (alternatives 
+;;   (alternatives 
+;;   (->list-if
     (->list
      (::
-      (->list
+       (->list
        (::
-	(between-fws (alternatives VerbPath VerbSimple))
-	ObjectListPath))
-      (:+
+         (between-fws (alternatives VerbPath VerbSimple))
+         ObjectListPath))
+      (:*
        (:: 
 	(drop-consumed (lit/sp ";"))
 	(:?
 	 (->list
 	  (::
 	   (between-fws (alternatives VerbPath VerbSimple))
-	   ObjectList)))))))
-    (::
-     (between-fws (alternatives VerbPath VerbSimple))
-     ObjectListPath))))
+	   ObjectList)))))))))
+    ;; (::
+    ;;  (between-fws (alternatives VerbPath VerbSimple))
+    ;;  ObjectListPath))))
 
 (define PropertyListPath
   (:? PropertyListPathNotEmpty))
@@ -794,29 +912,31 @@
 (define Object GraphNode)
 
 (define ObjectList
-  (alternatives
+;;  (alternatives
+  (->list-if
    (->list
     (:: Object
-	(:+
+	(:*
 	 (:: (drop-consumed (lit/sp ","))
-	     Object))))
-   Object))
+	     Object))))))
+;;   Object))
 
 (define Verb (alternatives VarOrIri (lit/sym "a")))
 
 (define PropertyListNotEmpty
-  (alternatives
+;;  (alternatives
+;;  (->list-if
    (->list
     (:: (->list 
 	 (:: (between-fws Verb)
 	     ObjectList))
-	(:+ (:: (drop-consumed (lit/sp ";"))
+	(:* (:: (drop-consumed (lit/sp ";"))
                (:? (->list
                     (:: (between-fws Verb)
-                        ObjectList)))))))
-    (::
-     (:: (between-fws Verb)
-	 ObjectList))))
+                        ObjectList))))))))
+    ;; (::
+    ;;  (:: (between-fws Verb)
+    ;;      ObjectList))))
 
 (define PropertyList (:? PropertyListNotEmpty))
 
@@ -876,15 +996,23 @@
 
 (define GroupOrUnionGraphPattern
   (vac
-   (alternatives
-     (->node
-      'UNION
+   ;; (alternatives
+   ;;   (->node
+   ;;    'UNION
+   ;;    (::
+   ;;     (->list GroupGraphPattern)
+   ;;     (:+ (::
+   ;;          (drop-consumed (lit/sp "UNION"))
+   ;;          (->list GroupGraphPattern)))))
+   ;;   (->list GroupGraphPattern))))
+   (->node-if
+    (->node
+     'UNION
       (::
        (->list GroupGraphPattern)
-       (:+ (::
+       (:* (::
             (drop-consumed (lit/sp "UNION"))
-            (->list GroupGraphPattern)))))
-     (->list GroupGraphPattern))))
+            (->list GroupGraphPattern))))))))
 
 (define MinusGraphPattern
   (vac
@@ -930,7 +1058,7 @@
     (lit/sym "VALUES")
     DataBlock)))
 
-;; bug - BIND( ?a + ?b AS ?c) is not parsed into polish notation
+;; bug - BIND( ?a + ?b AS ?c) is not parsed into prefix notation
 (define Bind
   (->list
    (:: 
@@ -1018,11 +1146,11 @@
         (:? TriplesTemplate)))))
 
 (define QuadData
-  ;; (->list
+  (->list
    (:: 
     (drop-consumed (lit/sp "{"))
     Quads
-    (drop-consumed (lit/sp "}"))))
+    (drop-consumed (lit/sp "}")))))
 
 ;; QuadPattern
 
