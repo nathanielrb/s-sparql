@@ -97,6 +97,13 @@
                 (map write-sparql (cdr exp))
                 ", "))))               
 
+(define (write-sparql-aggregate exp)
+  ;; (or (equal? (car exp) 'GROUP_CONCAT) ...
+  (and (member (car exp) aggregates)
+       (format #f "~A(~A)"
+               (car exp)
+               (write-sparql (cdr exp)))))
+
 (define binary-operators '(+ - * / = != <= >= < > IN |NOT IN| && |||| ))
 
 (define (write-sparql-binary exp)
@@ -151,13 +158,10 @@
 (define (sparql exp #!optional (level 0))
   (or (write-sparql-blank-node exp)
       (write-sparql-element exp)
+      (write-sparql-aggregate exp)
       (write-sparql-function exp)
       (write-sparql-binary exp)
       ))
-
-
-
-
 
 (define (swrite block #!optional (bindings '()) (rules (*rules*)))
   (let ((cj (lambda (a b)
@@ -268,7 +272,12 @@
      . ,(lambda (block bindings)
           (values
            (format "~A(~A)" (car block)
-                   (swrite (cdr block) (zero (sep " " bindings))))
+                   (swrite (second block) (zero (sep " " bindings))))
+           bindings)))
+    ((DISTINCT)
+     . ,(lambda (block bindings)
+          (values
+           (format "DISTINCT ~A" (swrite (second block)))
            bindings)))
     ((CONSTRUCT WHERE
       DELETE |DELETE WHERE| |DELETE DATA|
