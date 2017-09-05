@@ -102,7 +102,10 @@
   (and (member (car exp) aggregates)
        (format #f "~A(~A)"
                (car exp)
-               (write-sparql (cdr exp)))))
+               (match (cdr exp)
+                 ((`DISTINCT exp) (format "DISTINCT ~A" (write-sparql exp)))
+                 (else
+                  (write-sparql (cdr exp)))))))
 
 (define binary-operators '(+ - * / = != <= >= < > IN |NOT IN| && |||| ))
 
