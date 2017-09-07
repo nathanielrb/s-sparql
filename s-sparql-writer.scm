@@ -107,7 +107,7 @@
                  (else
                   (write-sparql (cdr exp)))))))
 
-(define binary-operators '(+ - * / = != <= >= < > IN |NOT IN| && |||| ))
+(define binary-operators '(+ - * / = != <= >= < > && ||||))
 
 (define (write-sparql-binary exp)
   (and (member (car exp) binary-operators)
@@ -271,16 +271,16 @@
      . ,(lambda (block bindings)
           (values (format "~A(~A)" (car block) (swrite (cdr block) (zero (sep "," bindings))))
                   bindings)))
-    (,aggregates ;; GROUP_CONCAT needs special treatment
+    (,aggregates ;; GROUP_CONCAT needs special treatment; also CONCAT and COALESCE (ExpressionLists)
      . ,(lambda (block bindings)
           (values
            (format "~A(~A)" (car block)
-                   (swrite (second block) (zero (sep " " bindings))))
+                   (swrite (cdr block) (zero (sep " " bindings))))
            bindings)))
     ((DISTINCT)
      . ,(lambda (block bindings)
           (values
-           (format "DISTINCT ~A" (swrite (second block)))
+           (format "DISTINCT ~A" (swrite (cdr block)))
            bindings)))
     ((CONSTRUCT WHERE
       DELETE |DELETE WHERE| |DELETE DATA|
@@ -315,6 +315,10 @@
      . ,(lambda (block bindings)
           (values (format "FILTER ~A" (swrite (cdr block) (nobreak bindings)))
                   bindings)))
+    ((BIND) 
+     . ,(lambda (block bindings)
+          (values (format "BIND ~A" (swrite (cdr block) (nobreak bindings)))
+                  bindings)))
     (,binary-operators
      . ,(lambda (block bindings)
           (values (format "(~A ~A ~A)"
@@ -322,6 +326,17 @@
                           (first block)
                           (swrite (list (third block)) (nobreak bindings)))
                   bindings)))
+    ((IN |NOT IN|)
+     . ,(lambda (block bindings)
+	  (match block
+	    ((op el `NIL) (values (format "(~A ~A NIL)" op (swrite (list el) (nobreak bindings))) bindings))
+	    ((op el ellist)
+	     (values
+	      (format "(~A ~A (~A))" 
+		      (swrite (list el) (nobreak bindings))
+		      op
+		      (swrite ellist (sep ", " (nobreak bindings))))
+	      bindings)))))
     ;; cons-pairs types/langtag
     ((VALUES)
      . ,(lambda (block bindings)

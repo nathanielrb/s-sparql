@@ -650,7 +650,10 @@
         (:: (lit/sym ">=") NumericExpression)
         (:: (lit/sym "<=") NumericExpression)
         (:: (lit/sym "IN") ExpressionList)
-        (:: (lit/sym "NOT") (lit/sym "IN") ExpressionList))))))))
+        (::  (bind-consumed->symbol
+	      (::
+	       (lit/sp "NOT ") (lit/sp "IN")))
+	     ExpressionList))))))))
   ;; (vac 
   ;;  (begin (print "RelationalExpression")
   ;;  (alternatives
