@@ -256,6 +256,9 @@
     (,number? . ,sw/literal)
     ((@QueryUnit @UpdateUnit @Query @Update @SubSelect @Prologue) . ,sw/obj) ;; (sep "\n"
     ((@Dataset @Using) . ,sw/obj)
+    ((FROM USING) 
+     . ,(lambda (block bindings)
+          (values (string-join (map symbol->string block)) bindings)))
     ((PREFIX) . ,sw/copy)
     ((SELECT |SELECT DISTINCT| |SELECT REDUCED|)
      . ,(lambda (block bindings)
