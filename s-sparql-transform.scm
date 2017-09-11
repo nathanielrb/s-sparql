@@ -380,21 +380,19 @@
   (and (list? quad)
        (equal? (car quad) 'GRAPH)))
 
-;; this isn't quite legal, but Virtuoso does it...
-(define (all-prologues QueryUnit)
+(define (all-prologues queries)
   (join
-   (map (lambda (unit)
-          (alist-ref '@Prologue unit))
-        (append (or (alist-ref '@Query QueryUnit) '())
-		(or (alist-ref '@Update QueryUnit) '())))))
+   (map (lambda (query)
+          (alist-ref '@Prologue (cdr query)))
+        queries)))
 
 (define (query-prefixes QueryUnit)
   (map (lambda (decl)
          (list (remove-trailing-char (cadr decl)) (write-uri (caddr decl))))
-       (filter PrefixDecl? (all-prologues QueryUnit))))
+       (filter PrefixDecl? (all-prologues (cdr QueryUnit)))))
 
 (define (rewrite-query QueryUnit rules)
-  (parameterize ((query-namespaces (query-prefixes (list QueryUnit)))
+  (parameterize ((query-namespaces (query-prefixes QueryUnit))
                  (*rules* rules))
     (let-values (((rw bindings)  (rewrite (list QueryUnit) '() rules)))
       (values (car rw) bindings))))
