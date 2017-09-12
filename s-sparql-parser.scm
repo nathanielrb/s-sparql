@@ -136,6 +136,18 @@
     ((_ p)    (bind consumed-chars->number p))
     ))
 
+(define (number->negative l)
+  (and (number? (car l)) (- (car l))))
+
+(define consumed-numbers (consumed-objects number?))
+
+(define consumed-values->negative
+  ((consumed-objects-lift consumed-numbers) number->negative))   
+
+(define-syntax ->negative
+  (syntax-rules ()
+    ((_ p) (bind consumed-values->negative p))))
+
 ;; polish arithmetic
 
 (define (polish-arithmetic stream)
@@ -143,7 +155,7 @@
     (if (null? ops) 
         (if (equal? (length stream) 1)
             (car stream)
-            (abort 'polish-error))
+            (abort "Polish error"))
         (rec (cdr ops)
              (let loop ((stream stream))
                (if (or (null? stream) (null? (cdr stream)))
@@ -172,26 +184,7 @@
     ((_ p)    (bind consumed-values->polish  p))
     ))
 
-;; really buggy
-;; (define (rel->prefix lst)
-;;   (and (pair? lst)
-;;        (pair? (car lst))
-;;        (let ((lst (car lst)))  ;;(or (and (equal? (caar lst) '|@()|)
-;;          (if (= (length lst) 3)
-;;              (list (cadr lst)
-;;                    (car lst)
-;;                    (caddr lst))
-;;              lst))))
-
-;; ;; (define consumed-values (consumed-objects pair?))
-
-;; (define consumed-pairs->prefix
-;;   (consumed-pairs->list rel->prefix))
-
-;; (define-syntax ->prefix
-;;   (syntax-rules () 
-;;     ((_ p)    (bind consumed-pairs->prefix p))
-;;     ))
+;; whitespace
 
 (define fws
   (concatenation
@@ -225,35 +218,90 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Production for terminals
 
-;; PN_LOCAL_ESC
+(define PN_LOCAL_ESC
+  (set-from-string "\\_~.-!$&'()*+,;=/?#@%"))
 
-;; HEX
+(define HEX hexadecimal)
 
-;; PERCENT
+;; what to do with this?
+(define PERCENT
+  (concatenation
+   (lit/sym "%") HEX HEX))
 
-;; PLX
+(define PLX
+  (alternatives PERCENT PN_LOCAL_ESC))
 
-(define PN_LOCAL  ;; **
-  (:+
-   (alternatives
+;; (define PN_LOCAL  ;; **
+;;   (:+
+;;    (alternatives
+;;     char-list/decimal
+;;     char-list/alpha
+;;     (set-from-string "-_%"))))
+
+(define PN_LOCAL
+  (concatenation
+   (alternatives 
+    PN_CHARS_U
+    (char-list/lit ":")
     char-list/decimal
-    char-list/alpha
-    (set-from-string "-_%"))))
+    PLX)
+   (:?
+    (::
+     (:*
+      (alternatives
+       PN_CHARS
+       (char-list/lit ".")
+       (char-list/lit ":")
+       PLX))
+     (alternatives
+      PN_CHARS
+      (char-list/lit ":")
+      PLX)))))
 
-;; PN_PREFIX
+(define PN_PREFIX
+  (concatenation
+   PN_CHARS_BASE
+   (:?
+    (concatenation
+     (:*
+      (alternatives
+       PN_CHARS
+       (char-list/lit ".")))
+     PN_CHARS))))
 
 (define PN_CHARS
   (vac
    (alternatives
     PN_CHARS_U
-    (set-from-string "-")))) ;; ** !!
-
-(define varname
-  (:+
-   (alternatives
+    (set-from-string "-")
     char-list/decimal
-    char-list/alpha
-    (set-from-string "-_"))))
+    (char-list/lit "·")
+    (set
+     (char-set-union
+      (ucs-range->char-set #x0300 #x036F)
+      (ucs-range->char-set #x203F #x2040))))))
+
+;; (define varname
+;;   (:+
+;;    (alternatives
+;;     char-list/decimal
+;;     char-list/alpha
+;;     (set-from-string "-_"))))
+
+(define VARNAME
+  (::
+   (alternatives
+    PN_CHARS_U
+    char-list/decimal)
+   (:*
+    (alternatives
+     PN_CHARS_U
+     char-list/decimal
+     (set
+      (char-set-union
+       (ucs-range->char-set #x00B7 #x00B8)
+       (ucs-range->char-set #x0300 #x036F)
+       (ucs-range->char-set #x203F #x2040)))))))
 
 (define PN_CHARS_U
   (vac
@@ -261,12 +309,30 @@
     PN_CHARS_BASE
     (set-from-string "_"))))
 
+;; (define PN_CHARS_BASE
+;;   (vac
+;;    (alternatives
+;;     char-list/decimal
+;;     char-list/alpha))) ;; **
+;; ;;   (set-from-string "_")
+
 (define PN_CHARS_BASE
-  (vac
-   (alternatives
-    char-list/decimal
-    char-list/alpha))) ;; **
-;;   (set-from-string "_")
+  (alternatives
+   char-list/alpha
+   (set
+    (char-set-union
+     (ucs-range->char-set #x00C0 #x00D6)
+     (ucs-range->char-set #x00D8 #x00F6)
+     (ucs-range->char-set #x00F8 #x02FF)
+     (ucs-range->char-set #x0370 #x037D)
+     (ucs-range->char-set #x037F #x1FFF)
+     (ucs-range->char-set #x200C #x200D)
+     (ucs-range->char-set #x2070 #x218F)
+     (ucs-range->char-set #x2C00 #x2FEF)
+     (ucs-range->char-set #x3001 #xD7FF)
+     (ucs-range->char-set #xF900 #xFDCF)
+     (ucs-range->char-set #xFDF0 #xFFFD)
+     (ucs-range->char-set #x10000 #xEFFFF)))))
 
 (define ANON
   (->node
@@ -275,7 +341,10 @@
         (drop-consumed (:? fws))
         (drop-consumed (lit/sp "]")))))
 
-;; WS
+(define WS
+  (set
+   (list->char-set
+    (list #\space #\tab #\newline #\return))))
 
 (define NIL
   (->node
@@ -288,42 +357,81 @@
   (:: (char-list/lit "\\")
       (set-from-string "tbnrf\\\"'")))
 
-;; ??? for stringliterals
-(define STRINGCHAR
-  (alternatives
-   (set-from-string " -_.")
-   char-list/decimal
-   char-list/alpha)) ;; **
+(define STRING_LITERAL_LONG2
+  (concatenation
+   (char-list/lit "\"\"\"")
+   (:*
+    (::
+     (:?
+      (alternatives 
+       (char-list/lit "\"")
+       (char-list/lit "\"\"")))
+     (alternatives
+      (set (char-set-complement (string->char-set "\"\\")))
+      ECHAR)))
+   (lit/sp "\"\"\"")))
 
-;; STRING_LITERAL_LONG2/LONG1/1/2
-;; simplified 
-
-(define STRING_LITERAL1
-  (:: (char-list/lit "\"")
-      (:+ (alternatives char-list/alpha
-                        char-list/decimal))
-      (char-list/lit "\"")))
+(define STRING_LITERAL_LONG1
+  (concatenation
+   (char-list/lit "'''")
+   (:*
+    (::
+     (:?
+      (alternatives 
+       (char-list/lit "'")
+       (char-list/lit "''")))
+     (alternatives
+      (set (char-set-complement (string->char-set "\"\\")))
+      ECHAR)))
+   (lit/sp "'''")))
 
 (define STRING_LITERAL2
-  (:: (char-list/lit "'")
-      (:+ (alternatives char-list/alpha
-                        char-list/decimal))
-      (char-list/lit "'")))
+  (concatenation
+   (drop-consumed (char-list/lit "\""))
+   (:*
+    (alternatives
+     (set (char-set-complement (list->char-set (list #\" #\\ #\newline #\return))))
+     ECHAR))
+   (drop-consumed (char-list/lit "\""))))
 
+(define STRING_LITERAL1
+  (concatenation
+   (char-list/lit "'")
+   (:*
+    (alternatives
+     (set (char-set-complement (list->char-set (list #\' #\\ #\newline #\return))))
+     ECHAR))
+   (char-list/lit "'")))
 
-;; Exponent
+(define EXPONENT
+  (concatenation
+   (set-from-string "eE")
+   (:? (set-from-string "+-"))
+   (:+ decimal)))
 
-;; DOUBLE_NEGATIVE
+(define DOUBLE_NEGATIVE
+  (vac
+   (concatenation
+    (drop-consumed (char-list/lit "-"))
+    (->negative DOUBLE))))
 
 (define DECIMAL_NEGATIVE
   (vac
-   (:: (lit/sym "-") DECIMAL)))
+   (::
+    (drop-consumed (char-list/lit "-"))
+    (->negative DECIMAL))))
 
 (define INTEGER_NEGATIVE
   (vac
-   (:: (lit/sym "-") INTEGER)))
+   (::
+    (drop-consumed (char-list/lit "-") )
+    (->negative INTEGER))))
 
-;; DOUBLE_POSITIVE
+(define DOUBLE_POSITIVE
+  (vac
+   (::
+    (drop-consumed (char-list/lit "+") )
+    DOUBLE)))
 
 (define DECIMAL_POSITIVE
   (vac
@@ -333,7 +441,21 @@
   (vac
    (:: (lit/sym "+") INTEGER)))
 
-;; DOUBLE
+(define DOUBLE 
+  (->number
+   (alternatives
+    (concatenation
+     (:+ decimal)
+     (char-list/lit ".")
+     (:* decimal)
+     EXPONENT)
+    (concatenation
+     (char-list/lit ".")
+     (:+ decimal)
+     EXPONENT)
+    (concatenation
+     (:+ decimal)
+     EXPONENT))))
 
 (define DECIMAL
   (->number
@@ -354,9 +476,15 @@
        (char-list/lit "-")
        (:+ char-list/alpha))))))
 
-;; VAR2
+(define VAR2
+  (concatenation
+   (char-list/lit "$")
+   VARNAME))
 
-;; VAR1
+(define VAR1
+  (concatenation
+   (char-list/lit "?")
+   VARNAME))
 
 (define BLANK_NODE_LABEL
   (vac
@@ -364,8 +492,8 @@
    (char-list/lit "_:")
    (alternatives
     PN_CHARS_U
-    char-list/decimal
-    char-list/alpha) ;; **
+    char-list/decimal)
+   ;; char-list/alpha) ;; **
    (:?
     (::
      (:*
@@ -415,21 +543,27 @@
     ;; IRIREF)
    PrefixedName))
 
+;; (define String
+;;   (bind-consumed->string
+;;    (alternatives
+;;     (::
+;;      (drop-consumed (char-list/lit "\""))
+;;      (repetition
+;;       (alternatives
+;;        STRINGCHAR ECHAR))
+;;      (drop-consumed (char-list/lit "\"")))
+;;     (::
+;;      (drop-consumed (char-list/lit "'"))
+;;      (repetition
+;;       (alternatives
+;;        STRINGCHAR ECHAR))
+;;      (drop-consumed (char-list/lit "'"))))))
+
+
 (define String
   (bind-consumed->string
    (alternatives
-    (::
-     (drop-consumed (char-list/lit "\""))
-     (repetition
-      (alternatives
-       STRINGCHAR ECHAR))
-     (drop-consumed (char-list/lit "\"")))
-    (::
-     (drop-consumed (char-list/lit "'"))
-     (repetition
-      (alternatives
-       STRINGCHAR ECHAR))
-     (drop-consumed (char-list/lit "'"))))))
+    STRING_LITERAL1 STRING_LITERAL2 STRING_LITERAL_LONG1 STRING_LITERAL_LONG2)))
 
 (define BooleanLiteral
    (alternatives
@@ -656,13 +790,14 @@
        (alternatives
         (:: (lit/sym "+") MultiplicativeExpression)
         (:: (lit/sym "-") MultiplicativeExpression)
-        ))))))
+        ;; ??
         ;; (:: 
         ;;  (alternatives  NumericLiteralPositive NumericLiteralNegative)
         ;;  (:*
         ;;   (alternatives
         ;;    (:: (lit/sym "*") UnaryExpression)
         ;;    (:: (lit/sym "/") UnaryExpression))))))))))
+        ))))))
 
 (define NumericExpression
   (vac 
@@ -746,11 +881,15 @@
    (alternatives
     iri RDFLiteral NumericLiteral BooleanLiteral BlankNode NIL))
 
+;; (define Var
+;;   (bind-consumed->symbol
+;;    (alternatives
+;;     (concatenation (char-list/lit "?") varname)
+;;     (concatenation (char-list/lit "$") varname))))
+
 (define Var
   (bind-consumed->symbol
-   (alternatives
-    (concatenation (char-list/lit "?") varname)
-    (concatenation (char-list/lit "$") varname))))
+   (alternatives VAR1 VAR2)))
 
 (define VarOrIri
   (alternatives Var iri))
@@ -1041,15 +1180,6 @@
 
 (define GroupOrUnionGraphPattern
   (vac
-   ;; (alternatives
-   ;;   (->node
-   ;;    'UNION
-   ;;    (::
-   ;;     (->list GroupGraphPattern)
-   ;;     (:+ (::
-   ;;          (drop-consumed (lit/sp "UNION"))
-   ;;          (->list GroupGraphPattern)))))
-   ;;   (->list GroupGraphPattern))))
    (->node-if
     (->node
      'UNION
