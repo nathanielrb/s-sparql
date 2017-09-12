@@ -59,7 +59,8 @@
     ))
 
 ;; list if >1 children (abstract this & next 2)
-
+;; but this often requires (->list-if (->list (:: ...))) which is redundant.
+;; it should combine both behaviors.
 (define (list-if lst)
   (and (pair? lst)
        (pair? (car lst))
@@ -135,26 +136,62 @@
     ((_ p)    (bind consumed-chars->number p))
     ))
 
-;; really buggy
-(define (rel->prefix lst)
+;; polish arithmetic
+
+(define (polish-arithmetic stream)
+  (let rec ((ops  '(/ * - +)) (stream stream))
+    (if (null? ops) 
+        (if (equal? (length stream) 1)
+            (car stream)
+            (abort 'polish-error))
+        (rec (cdr ops)
+             (let loop ((stream stream))
+               (if (or (null? stream) (null? (cdr stream)))
+                   stream
+                   (match stream
+                     ((a op b . rest)
+                      (if (equal? op (car ops))
+                          (loop
+                           `((,(car ops) ,a ,b) ,@rest))
+                          `(,a ,op
+                               ,@(loop (cddr stream))))))))))))
+
+(define (polish lst)        
   (and (pair? lst)
        (pair? (car lst))
-       (let ((lst (car lst)))  ;;(or (and (equal? (caar lst) '|@()|)
-         (if (= (length lst) 3)
-             (list (cadr lst)
-                   (car lst)
-                   (caddr lst))
-             lst))))
+       (let ((lst (car lst)))
+         (if (= (length lst) 1)
+             (car lst)
+             (polish-arithmetic lst)))))
 
-;; (define consumed-values (consumed-objects pair?))
+(define consumed-values->polish
+  (consumed-pairs->list polish))
 
-(define consumed-pairs->prefix
-  (consumed-pairs->list rel->prefix))
-
-(define-syntax ->prefix
+(define-syntax ->polish
   (syntax-rules () 
-    ((_ p)    (bind consumed-pairs->prefix p))
+    ((_ p)    (bind consumed-values->polish  p))
     ))
+
+;; really buggy
+;; (define (rel->prefix lst)
+;;   (and (pair? lst)
+;;        (pair? (car lst))
+;;        (let ((lst (car lst)))  ;;(or (and (equal? (caar lst) '|@()|)
+;;          (if (= (length lst) 3)
+;;              (list (cadr lst)
+;;                    (car lst)
+;;                    (caddr lst))
+;;              lst))))
+
+;; ;; (define consumed-values (consumed-objects pair?))
+
+;; (define consumed-pairs->prefix
+;;   (consumed-pairs->list rel->prefix))
+
+;; (define-syntax ->prefix
+;;   (syntax-rules () 
+;;     ((_ p)    (bind consumed-pairs->prefix p))
+;;     ))
 
 (define fws
   (concatenation
@@ -596,32 +633,37 @@
 
 ;; To Prefix Notation!!
 (define MultiplicativeExpression
-  (::
-   UnaryExpression
-   ;; (:*
-   ;;  (alternatives
-   ;;   (:: (lit/sym "*")
-   ;;       UnaryExpression)
-   ;;   (:: (lit/sym "/")
-   ;;       UnaryExpression)))))
-))
+  (->polish
+    (->list
+     (::
+      UnaryExpression
+      (:*
+       (alternatives
+        (:: (lit/sym "*")
+            UnaryExpression)
+        (:: (lit/sym "/")
+            UnaryExpression)))))))
 
-;; To Prefix Notation!!
+;; AdditiveExpression ::= MultiplicativeExpression ( '+' MultiplicativeExpression | '-' MultiplicativeExpression | ( NumericLiteralPositive | NumericLiteralNegative ) ( ( '*' UnaryExpression ) | ( '/' UnaryExpression ) )* )*
 (define AdditiveExpression
-  (::
-   MultiplicativeExpression
-   ;;(:*
-   ;;  (alternatives
-   ;;   (:: (lit/sym "+") MultiplicativeExpression)
-   ;;   (:: (lit/sym "-") MultiplicativeExpression)
-   ;;   (:: 
-   ;;    (alternatives  NumericLiteralPositive NumericLiteralNegative)
-   ;;    (:*
-   ;;     (alternatives
-   ;;      (:: (lit/sym "*") UnaryExpression)
-   ;;      (:: (lit/sym "/") UnaryExpression))))))))
-))
-				
+  ;;(->infix-if
+  ;;   (->list-if
+  (->polish
+    (->list
+     (::
+      MultiplicativeExpression
+      (:*
+       (alternatives
+        (:: (lit/sym "+") MultiplicativeExpression)
+        (:: (lit/sym "-") MultiplicativeExpression)
+        ))))))
+        ;; (:: 
+        ;;  (alternatives  NumericLiteralPositive NumericLiteralNegative)
+        ;;  (:*
+        ;;   (alternatives
+        ;;    (:: (lit/sym "*") UnaryExpression)
+        ;;    (:: (lit/sym "/") UnaryExpression))))))))))
+
 (define NumericExpression
   (vac 
  AdditiveExpression))
