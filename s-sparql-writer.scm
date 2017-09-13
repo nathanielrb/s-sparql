@@ -107,7 +107,7 @@
                  (else
                   (write-sparql (cdr exp)))))))
 
-(define binary-operators '(+ - * / = != <= >= < > && ||||))
+(define binary-operators '(+ - * / = != <= >= < > && \|\|))
 
 (define (write-sparql-binary exp)
   (and (member (car exp) binary-operators)
@@ -254,6 +254,7 @@
 (define srules
   `((,symbol? . ,sw/literal)
     (,number? . ,sw/literal)
+    (,string? . ,(lambda (str bindings) (values (sparql str) bindings)))
     ((@QueryUnit @UpdateUnit @Query @Update @SubSelect @Prologue) . ,sw/obj) ;; (sep "\n"
     ((@Dataset @Using) . ,sw/obj)
     ((FROM USING) 

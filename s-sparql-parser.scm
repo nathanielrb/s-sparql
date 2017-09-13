@@ -10,8 +10,8 @@
 (use sparql-query
      srfi-13 srfi-69 http-client intarweb uri-common medea cjson matchable irregex)
 
-
-(require-extension typeclass input-classes abnf abnf-charlist abnf-consumers
+(require-extension utf8 utf8-srfi-14
+                   typeclass input-classes abnf abnf-charlist abnf-consumers
                    lexgen)
 
 (define char-list-<Input>
@@ -238,36 +238,48 @@
 ;;     char-list/alpha
 ;;     (set-from-string "-_%"))))
 
+(define (lstar p1 p2)
+  (letrec ((rec
+            (vac
+             (alternatives
+              (seq p1 rec)
+              p2))))
+    rec))
+
 (define PN_LOCAL
-  (concatenation
-   (alternatives 
-    PN_CHARS_U
-    (char-list/lit ":")
-    char-list/decimal
-    PLX)
-   (:?
-    (::
-     (:*
-      (alternatives
+  (vac
+   (concatenation
+    (alternatives 
+     PN_CHARS_U
+     (char-list/lit ":")
+     char-list/decimal
+     PLX)
+    (:?
+     (lstar
+      (alternatives 
+       (set-from-string ":.") 
+       PN_CHARS PLX)
+      (alternatives 
        PN_CHARS
-       (char-list/lit ".")
-       (char-list/lit ":")
-       PLX))
-     (alternatives
-      PN_CHARS
-      (char-list/lit ":")
-      PLX)))))
+       (char-list/lit ":") 
+       PLX))))))
+
 
 (define PN_PREFIX
-  (concatenation
-   PN_CHARS_BASE
-   (:?
-    (concatenation
-     (:*
-      (alternatives
-       PN_CHARS
-       (char-list/lit ".")))
-     PN_CHARS))))
+  (vac
+   (concatenation
+    PN_CHARS_BASE
+    (:?
+     ;; (letrec ((rec
+     ;;           (vac
+     ;;            (alternatives
+     ;;             (seq (alternatives 
+     ;;                   (char-list/lit ".") 
+     ;;                   PN_CHARS)
+     ;;                  rec)
+     ;;             PN_CHARS))))
+     ;;   rec)))))
+     (lstar (alternatives  (char-list/lit ".")  PN_CHARS) PN_CHARS)))))
 
 (define PN_CHARS
   (vac
@@ -281,40 +293,27 @@
       (ucs-range->char-set #x0300 #x036F)
       (ucs-range->char-set #x203F #x2040))))))
 
-;; (define varname
-;;   (:+
-;;    (alternatives
-;;     char-list/decimal
-;;     char-list/alpha
-;;     (set-from-string "-_"))))
-
 (define VARNAME
-  (::
-   (alternatives
-    PN_CHARS_U
-    char-list/decimal)
-   (:*
+  (vac
+   (::
     (alternatives
      PN_CHARS_U
-     char-list/decimal
-     (set
-      (char-set-union
-       (ucs-range->char-set #x00B7 #x00B8)
-       (ucs-range->char-set #x0300 #x036F)
-       (ucs-range->char-set #x203F #x2040)))))))
+     char-list/decimal)
+    (:*
+     (alternatives
+      PN_CHARS_U
+      char-list/decimal
+      (set
+       (char-set-union
+        (ucs-range->char-set #x00B7 #x00B8)
+        (ucs-range->char-set #x0300 #x036F)
+        (ucs-range->char-set #x203F #x2040))))))))
 
 (define PN_CHARS_U
   (vac
    (alternatives
     PN_CHARS_BASE
     (set-from-string "_"))))
-
-;; (define PN_CHARS_BASE
-;;   (vac
-;;    (alternatives
-;;     char-list/decimal
-;;     char-list/alpha))) ;; **
-;; ;;   (set-from-string "_")
 
 (define PN_CHARS_BASE
   (alternatives
@@ -493,13 +492,9 @@
    (alternatives
     PN_CHARS_U
     char-list/decimal)
-   ;; char-list/alpha) ;; **
    (:?
-    (::
-     (:*
-      (alternatives
-       PN_CHARS
-       (char-list/lit ".")))
+    (lstar 
+     (alternatives (char-list/lit ".") PN_CHARS) 
      PN_CHARS)))))
 
 (define PNAME_LN
@@ -507,24 +502,17 @@
    (concatenation PNAME_NS PN_LOCAL)) )
 
 (define PNAME_NS
-  (concatenation
-   (repetition1 
-    ;; should be PN_PREFIX
-    (alternatives
-     char-list/decimal
-     char-list/alpha
-     (char-list/lit "-")))
-   (char-list/lit ":")))
+  (:: (:? PN_PREFIX) (char-list/lit ":")))
 
-(define IRIREF ;; ** really cheating
+(define IRIREF 
   (concatenation
    (char-list/lit "<")
-   (repetition1 
-    (alternatives ;; should be list-from-string
-     char-list/alpha
-     char-list/decimal
-     (set-from-string "-_&?#.:/+")))
-;     (char-list/lit "/")))
+   (repetition
+    (set
+     (char-set-difference
+      (char-set-complement
+       (list->char-set (list #\< #\> #\{ #\} #\| #\^ #\` #\\)))
+      (ucs-range->char-set #x00 #x20))))
    (char-list/lit ">")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -539,26 +527,9 @@
 (define iri
   (alternatives 
    (bind-consumed->symbol
-    (between-fws IRIREF)) ;; whitespace...
-    ;; IRIREF)
+    ;; (between-fws IRIREF)) ;; whitespace...
+    IRIREF)
    PrefixedName))
-
-;; (define String
-;;   (bind-consumed->string
-;;    (alternatives
-;;     (::
-;;      (drop-consumed (char-list/lit "\""))
-;;      (repetition
-;;       (alternatives
-;;        STRINGCHAR ECHAR))
-;;      (drop-consumed (char-list/lit "\"")))
-;;     (::
-;;      (drop-consumed (char-list/lit "'"))
-;;      (repetition
-;;       (alternatives
-;;        STRINGCHAR ECHAR))
-;;      (drop-consumed (char-list/lit "'"))))))
-
 
 (define String
   (bind-consumed->string
