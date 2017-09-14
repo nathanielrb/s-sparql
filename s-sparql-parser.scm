@@ -223,10 +223,10 @@
 
 (define HEX hexadecimal)
 
-;; what to do with this?
+;; how should this be represented?
 (define PERCENT
   (concatenation
-   (lit/sym "%") HEX HEX))
+   (char-list/lit "%") HEX HEX))
 
 (define PLX
   (alternatives PERCENT PN_LOCAL_ESC))
@@ -246,6 +246,22 @@
               p2))))
     rec))
 
+(use amb amb-extras)
+
+(define (bstar p)
+  (lambda (sk fk strm)
+    (or
+     (call/cc
+      (lambda (k)
+	(p (lambda (strm1)
+	     ((bstar p) sk (lambda (s)
+			     (print "failed at " strm1) 
+			     (print "going back to " strm)
+			     (print "=>" (sk strm))
+				   (k #f)) strm1))
+	   fk strm)))
+     (sk strm))))
+
 (define PN_LOCAL
   (vac
    (concatenation
@@ -255,10 +271,11 @@
      char-list/decimal
      PLX)
     (:?
-     (lstar
-      (alternatives 
-       (set-from-string ":.") 
-       PN_CHARS PLX)
+     (concatenation
+      (bstar
+       (alternatives 
+	(set-from-string ":.") 
+	PN_CHARS PLX))
       (alternatives 
        PN_CHARS
        (char-list/lit ":") 
