@@ -168,15 +168,26 @@
 		   (if (equal? ss '(error))
 		       #f
 		       ss)))
-	       ;; sk ;;HERE
+	       ;;sk
 	       (lambda (s)
-		 (print "failed") (sk s))
+		 (print "error")
+		 (let ((ss (sk strm)))		      
+		   (if (equal? ss '(error))
+		       #f
+		       ss)))
 	       strm1))
 	  (begin (print "backtracking on " strm)
 		 (sk strm))) )
        (lambda (s)
-	 (print "failed here ") ;; ** 
-	 (sk s))
+	 (print "failed here, s = " s ", strm = " strm) ;; ** 
+	 (let ((ss (sk s)))
+	   (print "(sk s) =>" ss)
+	   (print "(sk strm) => " (sk strm))
+	   (print "(fk s) => "(fk s))
+	   (print "(fk strm) => "(fk strm))
+	   (if (equal? ss '(error))
+	       (sk strm)
+	       ss)))
        strm)  ))
 
 (define-syntax test
@@ -206,8 +217,8 @@
 (test '((a a a a a) (b))
       (lex (opt (seq (bstar (lit "a")) (lit "a"))) er "aaaaab"))
 
+(test '(() (a a a a a b))
+      (lex (opt (seq (bstar (lit "a")) (lit "b"))) er "aaaaaa"))
+
 (test '((a a a a a b) ())
       (lex (opt (seq (bstar (lit "a")) (lit "b"))) er "aaaaab"))
-
-(test '(() (a a a a a b))
-      (lex (opt (seq (bstar (lit "a")) (lit "a"))) er "aaaaab"))
