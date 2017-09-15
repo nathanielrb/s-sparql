@@ -33,7 +33,7 @@
   (print "lexical error on stream: " s)
   `(error))
 
-(define lit char-list/lit)
+
 
 ;; This matches a sequence of patterns. 
 
@@ -81,28 +81,28 @@
 
 
 
-(use amb amb-extras)
+;; (use amb amb-extras)
 
-(define (bstar p)
-  (lambda (sk fk strm)
-    (print "trying " ((seq p (bstar p)) sk fk strm))
-    (let ((s
-	   (amb ((seq p (bstar p)) sk fk strm)
-		(p sk fk strm)
-		(sk strm))))
-      (required (not (equal? s '(error))))
-      s)))
+;; (define (bstar p)
+;;   (lambda (sk fk strm)
+;;     (print "trying " ((seq p (bstar p)) sk fk strm))
+;;     (let ((s
+;; 	   (amb ((seq p (bstar p)) sk fk strm)
+;; 		(p sk fk strm)
+;; 		(sk strm))))
+;;       (required (not (equal? s '(error))))
+;;       s)))
 
-(define (er s) '(error))
 
-(define (bstar p)
-  (lambda (sk fk strm)
-    (let ((s
-	   (amb (p (lambda (strm1)
-		     ((bstar p) sk fk strm1)) fk strm)
-		(pass sk fk strm))))
-      (required (not (equal? s '(error))))
-      s)))
+
+;; (define (bstar p)
+;;   (lambda (sk fk strm)
+;;     (let ((s
+;; 	   (amb (p (lambda (strm1)
+;; 		     ((bstar p) sk fk strm1)) fk strm)
+;; 		(pass sk fk strm))))
+;;       (required (not (equal? s '(error))))
+;;       s)))
 
 (define (bstar p)
   (lambda (sk fk strm)
@@ -159,9 +159,9 @@
   (lambda (sk fk strm)
     (p (lambda (strm1)
 	 (or 
-	  (if (null? (cadr strm1))
-	      (begin (print "null")
-		     (sk strm))
+	  ;; (if (null? (cadr strm1))
+	  ;;     (begin ;;(print "null")
+          ;;       (sk strm1))
 	      ((bstar p)
 	       (lambda (s)
 		 (let ((ss (sk s)))		      
@@ -170,25 +170,58 @@
 		       ss)))
 	       ;;sk
 	       (lambda (s)
-		 (print "error")
+		 ;;(print "error")
 		 (let ((ss (sk strm)))		      
 		   (if (equal? ss '(error))
 		       #f
 		       ss)))
-	       strm1))
-	  (begin (print "backtracking on " strm)
+	       strm1)
+	  (begin;; (print "backtracking on " strm)
 		 (sk strm))) )
-       (lambda (s)
-	 (print "failed here, s = " s ", strm = " strm) ;; ** 
-	 (let ((ss (sk s)))
-	   (print "(sk s) =>" ss)
-	   (print "(sk strm) => " (sk strm))
-	   (print "(fk s) => "(fk s))
-	   (print "(fk strm) => "(fk strm))
-	   (if (equal? ss '(error))
-	       (sk strm)
-	       ss)))
+       sk
+       ;; (lambda (s)
+       ;;   ;; (print "failed here, s = " s ", strm = " strm) ;; ** 
+       ;;   (let ((ss (sk s)))
+       ;;     ;; (print "(sk s) =>" ss)
+       ;;     ;; (print "(sk strm) => " (sk strm))
+       ;;     ;; (print "(fk s) => "(fk s))
+       ;;     ;; (print "(fk strm) => "(fk strm))
+       ;;     (if (equal? ss '(error))
+       ;;         (sk strm)
+       ;;         ss)))
        strm)  ))
+
+(define (er s)
+  ;; (print "error at " s)
+  '(error))
+
+(define lit char-list/lit)
+
+(define (bstar p)
+  (lambda (sk fk strm)
+    (let ((try
+           (lambda (s)
+             (let ((ss (sk s)))		      
+               (if (equal? ss '(error)) #f
+                   ss)))))
+      (p (lambda (strm1)
+           (or 
+            ((bstar p) try try strm1)
+            (sk strm)))
+         sk
+         strm))))
+
+(define (bbar p1 p2)
+  (lambda (sk fk strm)
+    (p1 sk (lambda (s)
+             (print (p1 sk fk strm))
+             (let ((ss (p1 sk fk strm)))
+               (if (equal? ss '(error)) 
+                   (p2 sk fk strm)
+                   ss)))
+        strm)))
+
+(define (bopt pat) (bbar pat pass))
 
 (define-syntax test
   (syntax-rules ()
@@ -200,25 +233,25 @@
      (newline)))))
 
 (test '((a a a a a) ())
-      (lex (seq (bstar (lit "a")) (lit "a")) er "aaaaa"))
+      (lex (seq (bstar (bar (lit "a") (lit "b"))) (lit "a")) er "abbba"))
 
 (test '((a a a a a b) ())
-      (lex (seq (bstar (lit "a")) (lit "b")) er "aaaaab"))
+      (lex (seq (bstar (bar (lit "a") (lit "b"))) (lit "b")) er "aaaaab"))
 
 (test '((a a a a a) (b))
-      (lex (seq (bstar (lit "a")) (lit "a")) er "aaaaab"))
+      (lex (seq (bstar (bar (lit "a") (lit "b"))) (lit "a")) er "aaaaab"))
 
 (test '(error)
       (lex (seq (bstar (lit "a")) (lit "b")) er "aaaaa"))
 
 (test '((a a a a a) ())
-      (lex (opt (seq (bstar (lit "a")) (lit "a"))) er "aaaaa"))
+      (lex (bopt (seq (bstar (lit "a")) (lit "a"))) er "aaaaa"))
 
 (test '((a a a a a) (b))
-      (lex (opt (seq (bstar (lit "a")) (lit "a"))) er "aaaaab"))
+      (lex (bopt (seq (bstar (lit "a")) (lit "a"))) er "aaaaab"))
 
 (test '(() (a a a a a b))
-      (lex (opt (seq (bstar (lit "a")) (lit "b"))) er "aaaaaa"))
+      (lex (bopt (seq (bstar (lit "a")) (lit "b"))) er "aaaaaa"))
 
 (test '((a a a a a b) ())
-      (lex (opt (seq (bstar (lit "a")) (lit "b"))) er "aaaaab"))
+      (lex (bopt (seq (bstar (lit "a")) (lit "b"))) er "aaaaab"))

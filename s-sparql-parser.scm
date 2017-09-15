@@ -6,6 +6,7 @@
 
 ;; Questions
 ;; - (|X DISTINCT| ..) or (X (DISTINCT ..)) ? (be consistent
+;; - numbers > numbers? record? symbol
 
 (use sparql-query
      srfi-13 srfi-69 http-client intarweb uri-common medea cjson matchable irregex)
@@ -14,6 +15,8 @@
                    typeclass input-classes abnf abnf-charlist abnf-consumers
                    lexgen)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Boilerplate
 (define char-list-<Input>
   (make-<Input> null? car cdr))
 
@@ -43,6 +46,38 @@
   (syntax-rules ()
     ((_ fn) (lambda args (apply fn args)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Backtracking
+(define (bstar p)
+  (lambda (sk fk strm)
+    (let ((try
+           (lambda (s)
+             (let ((ss (sk s)))		      
+               (if (equal? ss '(error)) #f
+                   ss)))))
+      (p (lambda (strm1)
+           (or 
+            ((bstar p) try try strm1)
+            (sk strm)))
+         sk
+         strm))))
+
+(define (bbar p1 p2)
+  (lambda (sk fk strm)
+    (p1 sk (lambda (s)
+             (let ((ss (p1 sk fk strm)))
+               (if (equal? ss '(error)) 
+                   (p2 sk fk strm)
+                   ss)))
+        strm)))
+
+(define balternatives bbar)
+
+(define (bopt pat) (bbar pat pass))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Binding functions
+;; To be cleaned up and abstracted
 (define consumed-values->list
   (consumed-objects-lift consumed-values))
 
@@ -231,37 +266,6 @@
 (define PLX
   (alternatives PERCENT PN_LOCAL_ESC))
 
-;; (define PN_LOCAL  ;; **
-;;   (:+
-;;    (alternatives
-;;     char-list/decimal
-;;     char-list/alpha
-;;     (set-from-string "-_%"))))
-
-(define (lstar p1 p2)
-  (letrec ((rec
-            (vac
-             (alternatives
-              (seq p1 rec)
-              p2))))
-    rec))
-
-(use amb amb-extras)
-
-(define (bstar p)
-  (lambda (sk fk strm)
-    (or
-     (call/cc
-      (lambda (k)
-	(p (lambda (strm1)
-	     ((bstar p) sk (lambda (s)
-			     (print "failed at " strm1) 
-			     (print "going back to " strm)
-			     (print "=>" (sk strm))
-				   (k #f)) strm1))
-	   fk strm)))
-     (sk strm))))
-
 (define PN_LOCAL
   (vac
    (concatenation
@@ -270,7 +274,7 @@
      (char-list/lit ":")
      char-list/decimal
      PLX)
-    (:?
+    (bopt
      (concatenation
       (bstar
        (alternatives 
@@ -281,22 +285,17 @@
        (char-list/lit ":") 
        PLX))))))
 
-
 (define PN_PREFIX
   (vac
    (concatenation
     PN_CHARS_BASE
-    (:?
-     ;; (letrec ((rec
-     ;;           (vac
-     ;;            (alternatives
-     ;;             (seq (alternatives 
-     ;;                   (char-list/lit ".") 
-     ;;                   PN_CHARS)
-     ;;                  rec)
-     ;;             PN_CHARS))))
-     ;;   rec)))))
-     (lstar (alternatives  (char-list/lit ".")  PN_CHARS) PN_CHARS)))))
+    (bopt
+     (seq
+      (bstar
+       (alternatives
+        (char-list/lit ".") 
+        PN_CHARS)) 
+      PN_CHARS)))))
 
 (define PN_CHARS
   (vac
@@ -383,9 +382,11 @@
        (char-list/lit "\"")
        (char-list/lit "\"\"")))
      (alternatives
-      (set (char-set-complement (string->char-set "\"\\")))
+      (set
+       (char-set-complement
+        (string->char-set "\"\\")))
       ECHAR)))
-   (lit/sp "\"\"\"")))
+   (char-list/lit "\"\"\"")))
 
 (define STRING_LITERAL_LONG1
   (concatenation
@@ -397,7 +398,9 @@
        (char-list/lit "'")
        (char-list/lit "''")))
      (alternatives
-      (set (char-set-complement (string->char-set "\"\\")))
+      (set 
+       (char-set-complement
+        (string->char-set "\"\\")))
       ECHAR)))
    (lit/sp "'''")))
 
@@ -406,7 +409,10 @@
    (drop-consumed (char-list/lit "\""))
    (:*
     (alternatives
-     (set (char-set-complement (list->char-set (list #\" #\\ #\newline #\return))))
+     (set
+      (char-set-complement
+       (list->char-set
+        (list #\" #\\ #\newline #\return))))
      ECHAR))
    (drop-consumed (char-list/lit "\""))))
 
@@ -415,7 +421,10 @@
    (char-list/lit "'")
    (:*
     (alternatives
-     (set (char-set-complement (list->char-set (list #\' #\\ #\newline #\return))))
+     (set 
+      (char-set-complement
+       (list->char-set
+        (list #\' #\\ #\newline #\return))))
      ECHAR))
    (char-list/lit "'")))
 
@@ -509,9 +518,9 @@
    (alternatives
     PN_CHARS_U
     char-list/decimal)
-   (:?
-    (lstar 
-     (alternatives (char-list/lit ".") PN_CHARS) 
+   (bopt
+    (seq
+     (bstar (alternatives (char-list/lit ".") PN_CHARS))
      PN_CHARS)))))
 
 (define PNAME_LN
@@ -539,13 +548,11 @@
 
 (define PrefixedName
   (bind-consumed->symbol
-   (alternatives PNAME_LN PNAME_NS)))
+   (balternatives PNAME_LN PNAME_NS)))
 
 (define iri
   (alternatives 
-   (bind-consumed->symbol
-    ;; (between-fws IRIREF)) ;; whitespace...
-    IRIREF)
+   (bind-consumed->symbol IRIREF)
    PrefixedName))
 
 (define String
@@ -561,16 +568,20 @@
           (lit/sp "false"))))
 
 (define NumericLiteralUnsigned
-  (alternatives INTEGER DECIMAL)) ;; DOUBLE
+  (alternatives
+   INTEGER DECIMAL DOUBLE))
 
 (define NumericLiteralPositive
-  (alternatives INTEGER_POSITIVE DECIMAL_POSITIVE)) ;; DOUBLE_POSITIVE))
+  (alternatives
+   INTEGER_POSITIVE DECIMAL_POSITIVE DOUBLE_POSITIVE))
 
 (define	NumericLiteralNegative 
-  (alternatives INTEGER_NEGATIVE DECIMAL_NEGATIVE)) ;; DOUBLE_NEGATIVE))
+  (alternatives
+   INTEGER_NEGATIVE DECIMAL_NEGATIVE DOUBLE_NEGATIVE))
 
 (define NumericLiteral
-  (alternatives NumericLiteralUnsigned NumericLiteralPositive NumericLiteralNegative))
+  (alternatives
+   NumericLiteralUnsigned NumericLiteralPositive NumericLiteralNegative))
 
 (define RDFLiteral
   (alternatives
@@ -586,7 +597,7 @@
 
 (define iriOrFunction
   (vac
-   (:: iri (:? ArgList))))
+   (concatenation iri (:? ArgList))))
 
 (define (bracketted-function label content)
   (vac
