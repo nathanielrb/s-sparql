@@ -1253,7 +1253,7 @@
    (::
     (alternatives
      (bind-consumed->symbol
-      (:: (lit/sp "SERVICE ")(lit/sp "SILENT")))
+      (:: (lit/sp "SERVICE ") (lit/sp "SILENT")))
      (lit/sym "SERVICE"))
     VarOrIri
     GroupGraphPattern)))
