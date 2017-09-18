@@ -62,6 +62,13 @@
          sk
          strm))))
 
+(define (sandbox p)
+  (lambda (sk fk strm)
+    (let ((s (p values err strm)))
+      (if (equal? s '(error))
+          (fk strm)
+          (sk s)))))
+
 (define (bbar p1 p2)
   (lambda (sk fk strm)
     (p1 sk (lambda (s)
@@ -234,13 +241,12 @@
 (define (between-fws p)
   (concatenation
    (optional-sequence (drop-consumed fws)) 
-   ;; (drop-consumed (optional-sequence fws)) 
    p
    (optional-sequence (drop-consumed fws)) ))
-;;(drop-consumed (optional-sequence fws))))
 
 (define (err s)
-  (print "lexical error on stream: " s)
+  ;; (print "lexical error on stream: " s)
+  ;; `(error . ,s))
   `(error))
 
 (define (lit/sp str)
@@ -254,7 +260,9 @@
 ;; Production for terminals
 
 (define PN_LOCAL_ESC
-  (set-from-string "\\_~.-!$&'()*+,;=/?#@%"))
+  (concatenation
+   (char-list/lit "\\")
+   (set-from-string "_~.-!$&'()*+,;=/?#@%")))
 
 (define HEX hexadecimal)
 
@@ -274,28 +282,30 @@
      (char-list/lit ":")
      char-list/decimal
      PLX)
-    (bopt
-     (concatenation
-      (bstar
+    (:?
+     (sandbox
+      (concatenation
+       (bstar
+        (alternatives 
+         (set-from-string ":.") 
+         PN_CHARS PLX))
        (alternatives 
-	(set-from-string ":.") 
-	PN_CHARS PLX))
-      (alternatives 
-       PN_CHARS
-       (char-list/lit ":") 
-       PLX))))))
+        PN_CHARS
+        (char-list/lit ":") 
+        PLX)))))))
 
 (define PN_PREFIX
   (vac
    (concatenation
     PN_CHARS_BASE
-    (bopt
-     (seq
-      (bstar
-       (alternatives
-        (char-list/lit ".") 
-        PN_CHARS)) 
-      PN_CHARS)))))
+    (:?
+     (sandbox
+      (concatenation
+       (bstar
+        (alternatives
+         (char-list/lit ".") 
+         PN_CHARS)) 
+       PN_CHARS))))))
 
 (define PN_CHARS
   (vac
@@ -518,9 +528,9 @@
    (alternatives
     PN_CHARS_U
     char-list/decimal)
-   (bopt
+   (:?
     (seq
-     (bstar (alternatives (char-list/lit ".") PN_CHARS))
+     (:* (alternatives (char-list/lit ".") PN_CHARS))
      PN_CHARS)))))
 
 (define PNAME_LN
@@ -528,7 +538,9 @@
    (concatenation PNAME_NS PN_LOCAL)) )
 
 (define PNAME_NS
-  (:: (:? PN_PREFIX) (char-list/lit ":")))
+  (:: 
+   (:? PN_PREFIX)
+   (char-list/lit ":")))
 
 (define IRIREF 
   (concatenation
@@ -548,7 +560,7 @@
 
 (define PrefixedName
   (bind-consumed->symbol
-   (balternatives PNAME_LN PNAME_NS)))
+   (alternatives PNAME_LN PNAME_NS)))
 
 (define iri
   (alternatives 
@@ -1047,14 +1059,12 @@
 (define ObjectPath GraphNodePath)
 
 (define	ObjectListPath
-;;  (alternatives
   (->list-if
    (->list
     (:: ObjectPath
 	(:*
 	 (:: (drop-consumed (lit/sp ","))
 	     ObjectPath))))))
-;;   ObjectPath))
 
 (define VerbSimple Var)
 
@@ -1062,8 +1072,6 @@
 
 (define PropertyListPathNotEmpty
   (vac
-;;   (alternatives 
-;;   (->list-if
     (->list
      (::
        (->list
@@ -1078,9 +1086,6 @@
 	  (::
 	   (between-fws (alternatives VerbPath VerbSimple))
 	   ObjectList)))))))))
-    ;; (::
-    ;;  (between-fws (alternatives VerbPath VerbSimple))
-    ;;  ObjectListPath))))
 
 (define PropertyListPath
   (:? PropertyListPathNotEmpty))
@@ -1095,39 +1100,41 @@
 (define Object GraphNode)
 
 (define ObjectList
-;;  (alternatives
   (->list-if
    (->list
-    (:: Object
-	(:*
-	 (:: (drop-consumed (lit/sp ","))
-	     Object))))))
-;;   Object))
+    (::
+     Object
+     (:*
+      (::
+       (drop-consumed (lit/sp ","))
+       Object))))))
 
 (define Verb (alternatives VarOrIri (lit/sym "a")))
 
 (define PropertyListNotEmpty
-;;  (alternatives
-;;  (->list-if
    (->list
-    (:: (->list 
-	 (:: (between-fws Verb)
-	     ObjectList))
-	(:* (:: (drop-consumed (lit/sp ";"))
-               (:? (->list
-                    (:: (between-fws Verb)
-                        ObjectList))))))))
-    ;; (::
-    ;;  (:: (between-fws Verb)
-    ;;      ObjectList))))
+    (::
+     (->list 
+      (::
+       (between-fws Verb)
+       ObjectList))
+     (:*
+      (::
+       (drop-consumed (lit/sp ";"))
+       (:?
+        (->list
+         (::
+          (between-fws Verb)
+          ObjectList))))))))
 
 (define PropertyList (:? PropertyListNotEmpty))
 
 (define TriplesSameSubject
-  (alternatives (:: (between-fws VarOrTerm)
-                    (between-fws PropertyListNotEmpty))
-                (:: (between-fws TriplesNode)
-                    (between-fws PropertyList))))
+  (alternatives
+   (:: (between-fws VarOrTerm)
+       (between-fws PropertyListNotEmpty))
+   (:: (between-fws TriplesNode)
+       (between-fws PropertyList))))
 
 (define ConstructTriples
   (vac
@@ -1640,8 +1647,10 @@
 
 ;; should also read from ports
 (define (parse-query query)
-  ;;(cons '@TOP
-  (caar (lex TopLevel err query)))
+  (let ((parsed-query (lex TopLevel err query)))
+    (if (equal? parsed-query '(error))
+        (error "Parse error.")
+        (caar parsed-query))))
 
 (define (read-sparql query)
   ;;(cons '@TOP
