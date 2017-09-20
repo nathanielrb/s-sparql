@@ -102,79 +102,72 @@
     ((_ p)      (bind (consumed-values->list)  p))
     ))
 
-(define-syntax ->node
-  (syntax-rules () 
-    ((_ label l p)    (bind (consumed-values->list label l)  p))
-    ((_ label p)      (bind (consumed-values->list label)  p))
-    ))
-
-;; list if >1 children (abstract this & next 2)
-;; but this often requires (->list-if (->list (concatenation ...))) which is redundant.
-;; it should combine both behaviors.
 (define (list-if lst)
   (and (pair? lst)
-       (pair? (car lst))
-       (let ((lst (car lst)))
-         (if (> (length lst) 1)
-             lst
-             (car lst)))))
+       (if (> (length lst) 1)
+           lst
+           (car lst))))
 
 (define consumed-values->list-if
-  (consumed-pairs->list list-if))
+  (consumed-values->list list-if))
 
 (define-syntax ->list-if
   (syntax-rules () 
     ((_ p)    (bind consumed-values->list-if  p))
     ))
 
-;; node if >1 children
+(define-syntax ->node
+  (syntax-rules () 
+    ((_ label l p)    (bind (consumed-values->list label l)  p))
+    ((_ label p)      (bind (consumed-values->list label)  p))
+    ))
 
-(define (node-if lst)
-  (and (pair? lst)
-       (pair? (car lst))
-       (let ((lst (car lst)))
-         (if (> (length lst) 2)
-             lst
-             (second lst)))))
+(define (node-if label)
+  (lambda (lst)
+    (print "n: "lst)
+    (and (pair? lst)
+         (if (> (length lst) 1)
+             (cons label lst)
+             (car lst)))))
 
 (define consumed-values->node-if
-  (consumed-pairs->list node-if))
+  (consumed-values->list node-if))
 
 (define-syntax ->node-if
   (syntax-rules () 
-    ((_ p)    (bind consumed-values->node-if  p))
+    ((_  label p)
+     (bind (consumed-values->list (node-if label))
+           p))
     ))
-
-;; infix
 
 (define (infix-if lst)
   (and (pair? lst)
-       (pair? (car lst))
-       (let ((lst (car lst)))
+       ;; (pair? (car lst))
+       ;; (let ((lst (car lst)))
          (cond ((= (length lst) 3)
                 (list (second lst) (first lst) (third lst)))
                ((= (length lst) 2)
                 (list (second lst) (first lst)))
-               (else (car lst))))))
+               (else (car lst)))))
 
 (define consumed-values->infix-if
-  (consumed-pairs->list infix-if))
+  (consumed-values->list infix-if))
 
 (define-syntax ->infix-if
   (syntax-rules () 
     ((_ p)    (bind consumed-values->infix-if  p))
     ))
 
-;; cons
+(define (list->cons lst)
+  (print lst)
+  (print (= (length lst) 1))
+  (and (list? lst)
+       (if (= (length lst) 1) (car lst)
+           (cons (car lst) (cadr lst)))))
 
-(define (2list->cons vals)
-  (and (list? vals)
-         (= (length vals) 2)
-         (cons (car vals) (cadr vals))))
-
-(define-syntax ->cons
+(define-syntax ->cons-if
   (syntax-rules () 
-    ((_ p)    (bind (consumed-values->list 2list->cons) p))
+    ((_ p)    (bind (consumed-values->list list->cons) p))
     ))
 
 (define consumed-chars->number
@@ -186,17 +179,17 @@
     ((_ p)    (bind consumed-chars->number p))
     ))
 
-(define (number->negative l)
-  (and (number? (car l)) (- (car l))))
+;; (define (number->negative l)
+;;   (and (number? (car l)) (- (car l))))
 
-(define consumed-numbers (consumed-objects number?))
+;; (define consumed-numbers (consumed-objects number?))
 
-(define consumed-values->negative
-  ((consumed-objects-lift consumed-numbers) number->negative))   
+;; (define consumed-values->negative
+;;   ((consumed-objects-lift consumed-numbers) number->negative))   
 
-(define-syntax ->negative
-  (syntax-rules ()
-    ((_ p) (bind consumed-values->negative p))))
+;; (define-syntax ->negative
+;;   (syntax-rules ()
+;;     ((_ p) (bind consumed-values->negative p))))
 
 ;; polish arithmetic
 
@@ -454,37 +447,38 @@
 (define DOUBLE_NEGATIVE
   (vac
    (concatenation
-    (drop-consumed (char-list/lit "-"))
-    (->negative DOUBLE))))
+    (char-list/lit "-")
+    DOUBLE)))
 
 (define DECIMAL_NEGATIVE
   (vac
    (concatenation
-    (drop-consumed (char-list/lit "-"))
-    (->negative DECIMAL))))
+    (char-list/lit "-")
+    DECIMAL)))
 
 (define INTEGER_NEGATIVE
   (vac
    (concatenation
-    (drop-consumed (char-list/lit "-") )
-    (->negative INTEGER))))
+    (char-list/lit "-")
+    INTEGER)))
 
 (define DOUBLE_POSITIVE
   (vac
    (concatenation
-    (drop-consumed (char-list/lit "+") )
+    (char-list/lit "+")
     DOUBLE)))
 
 (define DECIMAL_POSITIVE
   (vac
-   (concatenation (lit/sym "+") DECIMAL)))
+   (concatenation
+    (char-list/lit "+") 
+    DECIMAL)))
 
 (define INTEGER_POSITIVE
   (vac
-   (concatenation (lit/sym "+") INTEGER)))
+   (concatenation (char-list/lit "+") INTEGER)))
 
 (define DOUBLE 
-  (->number
    (alternatives
     (concatenation
      (repetition1 decimal)
@@ -497,16 +491,16 @@
      EXPONENT)
     (concatenation
      (repetition1 decimal)
-     EXPONENT))))
+     EXPONENT)))
 
 (define DECIMAL
-  (->number
-   (concatenation 
-    (repetition char-list/decimal)
-    (char-list/lit ".")
-    (repetition1 char-list/decimal))))
+  (concatenation 
+   (repetition char-list/decimal)
+   (char-list/lit ".")
+   (repetition1 char-list/decimal)))
 
-(define INTEGER (->number (repetition1 char-list/decimal)))
+(define INTEGER 
+  (repetition1 char-list/decimal))
 
 (define LANGTAG 
   (bind-consumed->symbol
@@ -597,37 +591,36 @@
 
 (define NumericLiteralUnsigned
   (between-fws 
-   (alternatives
-    INTEGER DECIMAL DOUBLE)))
+   (->number
+    (alternatives
+     DOUBLE DECIMAL INTEGER))))
 
 (define NumericLiteralPositive
   (between-fws 
-   (alternatives
-    INTEGER_POSITIVE DECIMAL_POSITIVE DOUBLE_POSITIVE)))
+   (->number
+    (alternatives
+     DOUBLE_POSITIVE DECIMAL_POSITIVE INTEGER_POSITIVE))))
 
 (define	NumericLiteralNegative 
   (between-fws 
-   (alternatives
-    INTEGER_NEGATIVE DECIMAL_NEGATIVE DOUBLE_NEGATIVE)))
+   (->number
+    (alternatives
+     DOUBLE_NEGATIVE DECIMAL_NEGATIVE INTEGER_NEGATIVE))))
 
 (define NumericLiteral
   (alternatives
    NumericLiteralUnsigned NumericLiteralPositive NumericLiteralNegative))
 
 (define RDFLiteral
-  (bind 
-   (consumed-values->list 
-    (lambda (c) 
-      (if (equal? (length c) 1) (car c)
-          (cons (car c) (cadr c)))))
-    (concatenation 
-     String
-     (optional-sequence
-      (alternatives
-       LANGTAG
-       (concatenation
-        (drop-consumed (char-list/lit "^^"))
-        iri))))))
+  (->cons-if
+   (concatenation 
+    String
+    (optional-sequence
+     (alternatives
+      LANGTAG
+      (concatenation
+       (drop-consumed (char-list/lit "^^"))
+       iri))))))
 
 (define iriOrFunction
   (vac
@@ -799,12 +792,12 @@
 (define UnaryExpression
   (vac 
    (->list-if
-    (->list
+;;    (->list
      (alternatives
       (concatenation (lit/sym "!") PrimaryExpression)
       (concatenation (lit/sym "+") PrimaryExpression)
       (concatenation (lit/sym "-") PrimaryExpression)
-      PrimaryExpression)))))
+      PrimaryExpression))))
 
 (define MultiplicativeExpression
   (->polish
@@ -834,48 +827,46 @@
 (define RelationalExpression 
   (vac
    (->infix-if
-    (->list
-     (concatenation 
-      NumericExpression
-      (optional-sequence 
-       (alternatives
-        (concatenation (lit/sym "=") NumericExpression)
-        (concatenation (lit/sym "!=") NumericExpression)
-        (concatenation (lit/sym "<") NumericExpression)
-        (concatenation (lit/sym ">") NumericExpression)
-        (concatenation (lit/sym ">=") NumericExpression)
-        (concatenation (lit/sym "<=") NumericExpression)
-        (concatenation (lit/sym "IN") ExpressionList)
-        (concatenation 
-         (bind-consumed->symbol
-          (concatenation
-           (lit/sp "NOT ") (lit/sp "IN")))
-         ExpressionList))))))))
+    (concatenation 
+     NumericExpression
+     (optional-sequence 
+      (alternatives
+       (concatenation (lit/sym "=") NumericExpression)
+       (concatenation (lit/sym "!=") NumericExpression)
+       (concatenation (lit/sym "<") NumericExpression)
+       (concatenation (lit/sym ">") NumericExpression)
+       (concatenation (lit/sym ">=") NumericExpression)
+       (concatenation (lit/sym "<=") NumericExpression)
+       (concatenation (lit/sym "IN") ExpressionList)
+       (concatenation 
+        (bind-consumed->symbol
+         (concatenation
+          (lit/sp "NOT ") (lit/sp "IN")))
+        ExpressionList)))))))
 
 (define ValueLogical RelationalExpression)
 
 (define ConditionalAndExpression
   (vac 
    (->node-if
-    (->node
      '&&
      (concatenation 
       ValueLogical
       (repetition
        (concatenation
         (drop-consumed (lit/sp "&&"))
-        ValueLogical)))))))
+        ValueLogical))))))
 
 (define ConditionalOrExpression
   (->node-if
-   (->node
+;;   (->node
     '||
     (concatenation 
      ConditionalAndExpression
      (repetition
       (concatenation
        (drop-consumed (lit/sp "||"))
-       ConditionalAndExpression))))))
+       ConditionalAndExpression)))))
 
 (define Expression
   (vac 
@@ -966,14 +957,14 @@
     (concatenation
      (drop-consumed (lit/sp "("))
      (->node-if
-      (->node
+;;      (->node
        '||
        (concatenation 
         PathOneInPropertySet
         (repetition
          (concatenation
           (drop-consumed (lit/sp "|"))
-          PathOneInPropertySet)))))
+          PathOneInPropertySet))))
      (drop-consumed (lit/sp ")"))))))
 
 (define PathPrimary
@@ -1009,33 +1000,33 @@
 
 (define PathElt
   (->infix-if
-   (->list
+;;   (->list
     (concatenation
      PathPrimary
-     (optional-sequence PathMod)))))
+     (optional-sequence PathMod))))
 
 (define PathSequence
   (vac
    (->node-if
-    (->node 
+;;    (->node 
      '/
      (concatenation 
       PathEltOrInverse
       (repetition
        (concatenation
         (drop-consumed (lit/sp "/"))
-        PathEltOrInverse)))))))
+        PathEltOrInverse))))))
 
 (define PathAlternative
   (->node-if
-   (->node
+;;   (->node
     '||
     (concatenation 
      PathSequence
      (repetition
       (concatenation
        (drop-consumed (lit/sp "|"))
-       PathSequence))))))
+       PathSequence)))))
 
 (define Path PathAlternative)
 
@@ -1043,13 +1034,13 @@
 
 (define	ObjectListPath
   (->list-if
-   (->list
+;;   (->list
     (concatenation 
      ObjectPath
      (repetition
       (concatenation
        (drop-consumed (lit/sp ","))
-       ObjectPath))))))
+       ObjectPath)))))
 
 (define VerbSimple Var)
 
@@ -1088,13 +1079,12 @@
 
 (define ObjectList
   (->list-if
-   (->list
-    (concatenation
+   (concatenation
      Object
      (repetition
       (concatenation
        (drop-consumed (lit/sp ","))
-       Object))))))
+       Object)))))
 
 (define Verb (alternatives VarOrIri (lit/sym "a")))
 
@@ -1180,14 +1170,14 @@
 (define GroupOrUnionGraphPattern
   (vac
    (->node-if
-    (->node
+;    (->node
      'UNION
      (concatenation
       (->list GroupGraphPattern)
       (repetition 
        (concatenation
         (drop-consumed (lit/sp "UNION"))
-        (->list GroupGraphPattern))))))))
+        (->list GroupGraphPattern)))))))
 
 (define MinusGraphPattern
   (vac
@@ -1238,13 +1228,13 @@
    (concatenation 
     (lit/sym "BIND")
     (->infix-if
-     (->list
+;;     (->list
       (concatenation 
        (drop-consumed (lit/sp "("))
        Expression
        (lit/sym "AS")
        Var
-       (drop-consumed (lit/sp ")"))))))))
+       (drop-consumed (lit/sp ")")))))))
 
 (define ServiceGraphPattern
   (vac
@@ -1602,7 +1592,7 @@
    FunctionCall
    (concatenation
     (->infix-if
-     (->list
+;     (->list
       (concatenation 
        (drop-consumed (lit/sp "("))
        Expression
@@ -1610,7 +1600,7 @@
         (concatenation
          (lit/sym "AS")
          Var))
-       (drop-consumed (lit/sp ")"))))))
+       (drop-consumed (lit/sp ")")))))
    Var))
 
 (define GroupClause
@@ -1703,13 +1693,13 @@
       (alternatives
        Var
        (->infix-if
-        (->list
+;;        (->list
 	 (concatenation 
 	  (drop-consumed (lit/sp "("))
 	  Expression
           (lit/sym "AS")
 	  Var
-	  (drop-consumed (lit/sp ")")))))))
+	  (drop-consumed (lit/sp ")"))))))
      (lit/sym "*"))))
 
 (define SubSelect
