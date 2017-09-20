@@ -7,14 +7,10 @@
 ;; Representation Questions 
 ;; [ ]  cdr or cadr for list (arglist vs SELECT): (SELECT DISTINCT ?a ?b) vs <iri> (DISTINCT ?a ?b)
 ;; [ ] X  (|X DISTINCT| ..) or (X (DISTINCT ..)) ? same for NAMED, SILENT (be consistent)
-;; - numbers > numbers? record? symbol
-;; - RdfLiteral - cons pair?
 ;; - @blank or record
 ;; - triples ... list or record?
 
 ;; graphordefault - what usage/list?
-
-;; - combine (->node-if (->node into single bind function (?)
 
 (use sparql-query
      srfi-13 srfi-69 http-client intarweb uri-common medea cjson matchable irregex)
@@ -54,6 +50,34 @@
   (syntax-rules ()
     ((_ fn) (lambda args (apply fn args)))))
 
+(define fws
+  (concatenation
+   (optional-sequence 
+    (concatenation
+     (repetition char-list/wsp)
+     (drop-consumed 
+      (alternatives char-list/crlf char-list/lf char-list/cr))))
+   (optional-sequence
+    (repetition char-list/wsp))))
+
+(define (between-fws p)
+  (concatenation
+   (optional-sequence (drop-consumed fws)) 
+   p
+   (optional-sequence (drop-consumed fws)) ))
+
+(define (err s)
+  ;; (print "lexical error on stream: " s)
+  ;; `(error . ,s))
+  `(error))
+
+(define (lit/sp str)
+  (between-fws (char-list/lit str)))
+
+(define (lit/sym str)
+  (bind-consumed->symbol
+   (between-fws (char-list/lit str))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Backtracking
 (define (bstar p)
@@ -92,7 +116,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Binding functions
-;; To be cleaned up and abstracted
 (define consumed-values->list
   (consumed-objects-lift consumed-values))
 
@@ -124,7 +147,6 @@
 
 (define (node-if label)
   (lambda (lst)
-    (print "n: "lst)
     (and (pair? lst)
          (if (> (length lst) 1)
              (cons label lst)
@@ -138,24 +160,6 @@
     ((_  label p)
      (bind (consumed-values->list (node-if label))
            p))
-    ))
-
-(define (infix-if lst)
-  (and (pair? lst)
-       ;; (pair? (car lst))
-       ;; (let ((lst (car lst)))
-         (cond ((= (length lst) 3)
-                (list (second lst) (first lst) (third lst)))
-               ((= (length lst) 2)
-                (list (second lst) (first lst)))
-               (else (car lst)))))
-
-(define consumed-values->infix-if
-  (consumed-values->list infix-if))
-
-(define-syntax ->infix-if
-  (syntax-rules () 
-    ((_ p)    (bind consumed-values->infix-if  p))
     ))
 
 (define (list->cons lst)
@@ -191,7 +195,21 @@
 ;;   (syntax-rules ()
 ;;     ((_ p) (bind consumed-values->negative p))))
 
-;; polish arithmetic
+(define (prefix-if lst)
+  (and (pair? lst)
+       (cond ((= (length lst) 3)
+              (list (second lst) (first lst) (third lst)))
+             ((= (length lst) 2)
+              (list (second lst) (first lst)))
+             (else (car lst)))))
+
+(define consumed-values->prefix-if
+  (consumed-values->list prefix-if))
+
+(define-syntax ->prefix-if
+  (syntax-rules () 
+    ((_ p)    (bind consumed-values->prefix-if  p))
+    ))
 
 (define (polish-arithmetic stream)
   (let rec ((ops  '(/ * - +)) (stream stream))
@@ -213,49 +231,17 @@
 
 (define (polish lst)        
   (and (pair? lst)
-       (pair? (car lst))
-       (let ((lst (car lst)))
-         (if (= (length lst) 1)
-             (car lst)
-             (polish-arithmetic lst)))))
+       (if (= (length lst) 1)
+           (car lst)
+           (polish-arithmetic lst))))
 
 (define consumed-values->polish
-  (consumed-pairs->list polish))
+  (consumed-values->list polish))
 
 (define-syntax ->polish
   (syntax-rules () 
     ((_ p)    (bind consumed-values->polish  p))
     ))
-
-;; whitespace
-
-(define fws
-  (concatenation
-   (optional-sequence 
-    (concatenation
-     (repetition char-list/wsp)
-     (drop-consumed 
-      (alternatives char-list/crlf char-list/lf char-list/cr))))
-   (optional-sequence
-    (repetition char-list/wsp))))
-
-(define (between-fws p)
-  (concatenation
-   (optional-sequence (drop-consumed fws)) 
-   p
-   (optional-sequence (drop-consumed fws)) ))
-
-(define (err s)
-  ;; (print "lexical error on stream: " s)
-  ;; `(error . ,s))
-  `(error))
-
-(define (lit/sp str)
-  (between-fws (char-list/lit str)))
-
-(define (lit/sym str)
-  (bind-consumed->symbol
-   (between-fws (char-list/lit str))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Terminals
@@ -792,7 +778,6 @@
 (define UnaryExpression
   (vac 
    (->list-if
-;;    (->list
      (alternatives
       (concatenation (lit/sym "!") PrimaryExpression)
       (concatenation (lit/sym "+") PrimaryExpression)
@@ -801,32 +786,30 @@
 
 (define MultiplicativeExpression
   (->polish
-    (->list
-     (concatenation
-      UnaryExpression
-      (repetition
-       (alternatives
-        (concatenation (lit/sym "*")
-            UnaryExpression)
-        (concatenation (lit/sym "/")
-            UnaryExpression)))))))
+   (concatenation
+    UnaryExpression
+    (repetition
+     (alternatives
+      (concatenation (lit/sym "*")
+                     UnaryExpression)
+      (concatenation (lit/sym "/")
+                     UnaryExpression))))))
 
 (define AdditiveExpression
   (->polish
-    (->list
-     (concatenation
-      MultiplicativeExpression
-      (repetition
-       (alternatives
-        (concatenation (lit/sym "+") MultiplicativeExpression)
-        (concatenation (lit/sym "-") MultiplicativeExpression)))))))
+   (concatenation
+    MultiplicativeExpression
+    (repetition
+     (alternatives
+      (concatenation (lit/sym "+") MultiplicativeExpression)
+      (concatenation (lit/sym "-") MultiplicativeExpression))))))
 
 (define NumericExpression
   (vac AdditiveExpression))
 
 (define RelationalExpression 
   (vac
-   (->infix-if
+   (->prefix-if
     (concatenation 
      NumericExpression
      (optional-sequence 
@@ -859,7 +842,6 @@
 
 (define ConditionalOrExpression
   (->node-if
-;;   (->node
     '||
     (concatenation 
      ConditionalAndExpression
@@ -957,7 +939,6 @@
     (concatenation
      (drop-consumed (lit/sp "("))
      (->node-if
-;;      (->node
        '||
        (concatenation 
         PathOneInPropertySet
@@ -999,8 +980,7 @@
       PathElt)))))
 
 (define PathElt
-  (->infix-if
-;;   (->list
+  (->prefix-if
     (concatenation
      PathPrimary
      (optional-sequence PathMod))))
@@ -1008,7 +988,6 @@
 (define PathSequence
   (vac
    (->node-if
-;;    (->node 
      '/
      (concatenation 
       PathEltOrInverse
@@ -1019,7 +998,6 @@
 
 (define PathAlternative
   (->node-if
-;;   (->node
     '||
     (concatenation 
      PathSequence
@@ -1034,7 +1012,6 @@
 
 (define	ObjectListPath
   (->list-if
-;;   (->list
     (concatenation 
      ObjectPath
      (repetition
@@ -1170,7 +1147,6 @@
 (define GroupOrUnionGraphPattern
   (vac
    (->node-if
-;    (->node
      'UNION
      (concatenation
       (->list GroupGraphPattern)
@@ -1227,8 +1203,7 @@
   (->list
    (concatenation 
     (lit/sym "BIND")
-    (->infix-if
-;;     (->list
+    (->prefix-if
       (concatenation 
        (drop-consumed (lit/sp "("))
        Expression
@@ -1591,8 +1566,7 @@
    BuiltInCall
    FunctionCall
    (concatenation
-    (->infix-if
-;     (->list
+    (->prefix-if
       (concatenation 
        (drop-consumed (lit/sp "("))
        Expression
@@ -1692,8 +1666,7 @@
      (repetition1
       (alternatives
        Var
-       (->infix-if
-;;        (->list
+       (->prefix-if
 	 (concatenation 
 	  (drop-consumed (lit/sp "("))
 	  Expression
