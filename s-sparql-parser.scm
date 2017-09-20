@@ -67,8 +67,7 @@
    (optional-sequence (drop-consumed fws)) ))
 
 (define (err s)
-  ;; (print "lexical error on stream: " s)
-  ;; `(error . ,s))
+  (print "lexical error on stream: " s)
   `(error))
 
 (define (lit/sp str)
@@ -95,24 +94,12 @@
          strm))))
 
 (define (sandbox p)
-  (lambda (sk fk strm)
-    (let ((s (p values err strm)))
-      (if (equal? s '(error))
-          (fk strm)
-          (sk s)))))
-
-;; (define (bbar p1 p2)
-;;   (lambda (sk fk strm)
-;;     (p1 sk (lambda (s)
-;;              (let ((ss (p1 sk fk strm)))
-;;                (if (equal? ss '(error)) 
-;;                    (p2 sk fk strm)
-;;                    ss)))
-;;         strm)))
-
-;; (define balternatives bbar)
-
-;; (define (bopt pat) (bbar pat pass))
+  (let ((err (lambda (s) '(error))))
+    (lambda (sk fk strm)
+      (let ((s (p values err strm)))
+        (if (equal? s '(error))
+            (fk strm)
+            (sk s))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Binding functions
