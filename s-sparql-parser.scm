@@ -48,8 +48,7 @@
 ;; helper macro for mutually-recursive parser definitions
 (define-syntax vac
   (syntax-rules ()
-;;    ((_ fn) (lambda args (apply fn args)))))
-    ((_ fn) (lambda args (print "trying " args) (apply fn args)))))
+    ((_ fn) (lambda args (apply fn args)))))
 
 (define fws
   (concatenation
@@ -164,8 +163,6 @@
     ))
 
 (define (list->cons lst)
-  (print lst)
-  (print (= (length lst) 1))
   (and (list? lst)
        (if (= (length lst) 1) (car lst)
            (cons (car lst) (cadr lst)))))
