@@ -281,10 +281,10 @@
            (format "~A(~A)" (car block)
                    (swrite (cdr block) (zero (sep " " bindings))))
            bindings)))
-    ((DISTINCT)
+    ((DISTINCT NAMED)
      . ,(lambda (block bindings)
           (values
-           (format "DISTINCT ~A" (swrite (cdr block)))
+           (format "~A ~A" (car block) (swrite (cdr block)))
            bindings)))
     ((CONSTRUCT WHERE
       DELETE |DELETE WHERE| |DELETE DATA|

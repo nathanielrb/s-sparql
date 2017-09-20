@@ -5,11 +5,8 @@
 ;; https://code.call-cc.org/svn/chicken-eggs/release/4/json-abnf/trunk/json-abnf.scm
 
 ;; Representation Questions 
-;; - (|X DISTINCT| ..) or (X (DISTINCT ..)) ? (be consistent
-;;     also SERVICE SILENT? USING NAMED
-;;     delete where
-;;     LOAD CLEAR DROP CREATE ADD MOVE
-;; - DESCRIBE
+;; [ ]  cdr or cadr for list (arglist vs SELECT): (SELECT DISTINCT ?a ?b) vs <iri> (DISTINCT ?a ?b)
+;; [ ] X  (|X DISTINCT| ..) or (X (DISTINCT ..)) ? same for NAMED, SILENT (be consistent)
 ;; - numbers > numbers? record? symbol
 ;; - RdfLiteral - cons pair?
 ;; - @blank or record
@@ -182,7 +179,7 @@
 
 (define consumed-chars->number
   (consumed-chars->list 
-   (compose string->number list->string)))
+   (compose string->symbol list->string)))
 
 (define-syntax ->number
   (syntax-rules () 
@@ -618,16 +615,19 @@
    NumericLiteralUnsigned NumericLiteralPositive NumericLiteralNegative))
 
 (define RDFLiteral
-  (alternatives
-   (->cons
+  (bind 
+   (consumed-values->list 
+    (lambda (c) 
+      (if (equal? (length c) 1) (car c)
+          (cons (car c) (cadr c)))))
     (concatenation 
      String
-     (alternatives
-      LANGTAG
-      (concatenation
-       (drop-consumed (char-list/lit "^^"))
-       iri))))
-   String))
+     (optional-sequence
+      (alternatives
+       LANGTAG
+       (concatenation
+        (drop-consumed (char-list/lit "^^"))
+        iri))))))
 
 (define iriOrFunction
   (vac
@@ -1160,11 +1160,12 @@
     (concatenation 
      (drop-consumed (lit/sp "("))
      (optional-sequence (lit/sym "DISTINCT"))
-     Expression
-     (repetition
-      (concatenation
-       (drop-consumed (lit/sp ","))
-       Expression))
+     (concatenation
+      Expression
+      (repetition
+       (concatenation
+        (drop-consumed (lit/sp ","))
+        Expression)))
      (drop-consumed (lit/sp ")"))))))
 
 (define FunctionCall 
@@ -1247,13 +1248,16 @@
 
 (define ServiceGraphPattern
   (vac
-   (concatenation
-    (alternatives
-     (bind-consumed->symbol
-      (concatenation (lit/sp "SERVICE ") (lit/sp "SILENT")))
-     (lit/sym "SERVICE"))
-    VarOrIri
-    GroupGraphPattern)))
+   (->list
+    (concatenation
+     (alternatives
+      (bind-consumed->symbol
+       (concatenation 
+        (lit/sp "SERVICE ") 
+        (lit/sp "SILENT")))
+      (lit/sym "SERVICE"))
+     VarOrIri
+     GroupGraphPattern))))
 
 (define GraphGraphPattern
   (vac
@@ -1358,24 +1362,29 @@
     (lit/sym "ALL"))))
 
 (define GraphRef
-  (concatenation
-   (lit/sym "GRAPH")
-   iri))
+  (->list
+   (concatenation
+    (lit/sym "GRAPH")
+    iri)))
 
 (define GraphOrDefault
   (alternatives
    (lit/sym "DEFAULT")
-   (concatenation
-    (optional-sequence (lit/sym "GRAPH"))
-    iri)))
+   (->list
+    (concatenation
+     (optional-sequence (lit/sym "GRAPH"))
+     iri))))
 
 (define UsingClause
   (->list
    (concatenation 
-    (lit/sym "USING")
-    (alternatives 
-     iri 
-     (concatenation (lit/sym "NAMED") iri)))))
+    (lit/sym "USING ")
+    (alternatives
+     (->list
+      (concatenation
+       (lit/sym "NAMED")
+       iri))
+     iri))))
   
 (define InsertClause
   (->list
@@ -1433,68 +1442,88 @@
     QuadData)))
 
 (define Copy
-  (concatenation
-   (alternatives
-    (bind-consumed->symbol
-     (concatenation (lit/sp "COPY ")(lit/sp "SILENT")))
-    (lit/sym "COPY"))
-   GraphOrDefault
-   (lit/sym "TO")
-   GraphOrDefault))
+  (->list
+   (concatenation
+    (alternatives
+     (bind-consumed->symbol
+      (concatenation 
+       (lit/sp "COPY ")
+       (lit/sp "SILENT")))
+     (lit/sym "COPY"))
+    GraphOrDefault
+    (lit/sym "TO")
+    GraphOrDefault)))
 
 (define Move
   (concatenation
    (alternatives
     (bind-consumed->symbol
-     (concatenation (lit/sp "MOVE ")(lit/sp "SILENT")))
+     (concatenation
+      (lit/sp "MOVE ")
+      (lit/sp "SILENT")))
     (lit/sym "MOVE"))
    GraphOrDefault
    (lit/sym "TO")
    GraphOrDefault))
 
 (define Add
-  (concatenation
-   (alternatives
-    (bind-consumed->symbol
-     (concatenation (lit/sp "ADD ")(lit/sp "SILENT")))
-    (lit/sym "ADD"))
-   GraphOrDefault
-   (lit/sym "TO")
-   GraphOrDefault))
+  (->list
+   (concatenation
+    (alternatives
+     (bind-consumed->symbol
+      (concatenation 
+       (lit/sp "ADD ")
+       (lit/sp "SILENT")))
+     (lit/sym "ADD"))
+    GraphOrDefault
+    (lit/sym "TO")
+    GraphOrDefault)))
 
 (define Create
-  (concatenation
-   (alternatives
-    (bind-consumed->symbol
-     (concatenation (lit/sp "CREATE ")(lit/sp "SILENT")))
-    (lit/sym "CREATE"))
-   GraphRef))
+  (->list
+   (concatenation
+    (alternatives
+     (bind-consumed->symbol
+      (concatenation
+       (lit/sp "CREATE ")
+       (lit/sp "SILENT")))
+     (lit/sym "CREATE"))
+    GraphRef)))
 
 (define Drop
-  (concatenation
-   (alternatives
-    (bind-consumed->symbol
-     (concatenation (lit/sp "DROP ")(lit/sp "SILENT")))
-    (lit/sym "DROP"))
-   GraphRefAll))
+  (->list
+   (concatenation
+    (alternatives
+     (bind-consumed->symbol
+      (concatenation
+       (lit/sp "DROP ")
+       (lit/sp "SILENT")))
+     (lit/sym "DROP"))
+    GraphRefAll)))
 
 (define Clear
-  (concatenation
-   (alternatives
-    (bind-consumed->symbol
-     (concatenation (lit/sp "CLEAR ")(lit/sp "SILENT")))
-    (lit/sym "CLEAR"))
-   GraphRefAll))
+  (->list
+   (concatenation
+    (alternatives
+     (bind-consumed->symbol
+      (concatenation
+       (lit/sp "CLEAR ")
+       (lit/sp "SILENT")))
+     (lit/sym "CLEAR"))
+    GraphRefAll)))
 
 (define Load
-  (concatenation
-   (alternatives
-    (bind-consumed->symbol
-     (concatenation (lit/sp "LOAD ")(lit/sp "SILENT")))
-    (lit/sym "LOAD"))
-   iri
-   (lit/sym "INTO")
-   GraphRef))
+  (->list
+   (concatenation
+    (alternatives
+     (bind-consumed->symbol
+      (concatenation
+       (lit/sp "LOAD ")
+       (lit/sp "SILENT")))
+     (lit/sym "LOAD"))
+    iri
+    (lit/sym "INTO")
+    GraphRef)))
 
 (define Update1
   (alternatives Load Clear Drop Add Move Copy Create 
@@ -1608,9 +1637,10 @@
 (define SourceSelector iri)
 
 (define NamedGraphClause
-  (concatenation
-   (lit/sym "NAMED")
-   SourceSelector))
+  (->list
+   (concatenation
+    (lit/sym "NAMED")
+    SourceSelector)))
 
 (define DefaultGraphClause SourceSelector)
 
@@ -1663,11 +1693,11 @@
 
 (define SelectClause
    (concatenation
-    (bind-consumed->symbol 
-     (alternatives
-      (lit/sp "SELECT DISTINCT")
-      (lit/sp "SELECT REDUCED")
-      (lit/sp "SELECT")))
+    (lit/sym "SELECT")
+    (optional-sequence                  ; in a list?
+     (alternatives 
+      (lit/sym "DISTINCT")
+      (lit/sym "REDUCED")))
     (alternatives
      (repetition1
       (alternatives
