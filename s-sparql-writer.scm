@@ -87,7 +87,7 @@
   '(COUNT SUM MIN MAX AVG SAMPLE GROUP_CONCAT))
 
 (define functions
-  '(STR LANG LANGMATCHES DATATYPE BOUND IRI URI BNODE RAND NIL ABS CEIL FLOOR ROUND IF CONCAT STRLEN UCASE LCASE ENCODE_FOR_URI CONTAINS STRSTARTS STRENDS STRBEFORE STRAFTER YEAR MONTH DAY HOURS MINUTES SECONDS TIMEZONE TZ NOW NIL UUID NIL STRUUID NIL MD5 SHA1 SHA256 SHA384 SHA512 COALESCE  STRLANG STRDT isIRI isURI isBLANK isLITERAL isNUMERIC REGEX SUBSTR REPLACE EXISTS))
+  '(STR LANG LANGMATCHES DATATYPE BOUND IRI URI BNODE RAND NIL ABS CEIL FLOOR ROUND IF CONCAT STRLEN UCASE LCASE ENCODE_FOR_URI CONTAINS STRSTARTS STRENDS STRBEFORE STRAFTER YEAR MONTH DAY HOURS MINUTES SECONDS TIMEZONE TZ NOW NIL UUID NIL STRUUID NIL MD5 SHA1 SHA256 SHA384 SHA512 COALESCE  STRLANG STRDT isIRI isURI isBLANK isLITERAL isNUMERIC REGEX SUBSTR REPLACE))
 
 (define (write-sparql-function exp)
   (and (member (car exp) (append functions aggregates))
@@ -261,16 +261,18 @@
      . ,(lambda (block bindings)
           (values (string-join (map symbol->string block)) bindings)))
     ((PREFIX) . ,sw/copy)
-    ((SELECT |SELECT DISTINCT| |SELECT REDUCED|)
+    ((SELECT |SELECT DISTINCT| |SELECT REDUCED| DESCRIBE ASK
+      LOAD CLEAR DROP CREATE ADD MOVE COPY)
      . ,(lambda (block bindings)
 	  (values (format "~A ~A" 
 			  (car block)
 			  (swrite (cdr block) (nobreak (zero (sep " " bindings)))))
 		  bindings)))
     ((AS) . ,sw/polish)
-    ((|@()|) . ,(lambda (block bindings)
-		  (values (format "(~A)" (swrite (cdr block) (sep " " bindings)))
-			  bindings)))
+    ((ASC DESC)
+     . ,(lambda (block bindings)
+          (values (format "~A(~A)" (car block) (swrite (cdr block) (zero (sep "," bindings))))
+                  bindings)))
     (,functions
      . ,(lambda (block bindings)
           (values (format "~A(~A)" (car block) (swrite (cdr block) (zero (sep "," bindings))))
@@ -286,10 +288,10 @@
           (values
            (format "~A ~A" (car block) (swrite (cdr block)))
            bindings)))
-    ((CONSTRUCT WHERE
+    ((CONSTRUCT WHERE 
       DELETE |DELETE WHERE| |DELETE DATA|
       INSERT |INSERT WHERE| |INSERT DATA|      
-      |NOT EXISTS| MINUS OPTIONAL)
+      EXISTS |NOT EXISTS| MINUS OPTIONAL)
      . ,(lambda (block bindings)
 	  (values (format "~A ~A" 
 			  ;;(pre bindings)
@@ -315,13 +317,9 @@
     (,triple? 
      . ,(lambda (triple bindings)
 	  (values (write-triple triple) '())))
-    ((FILTER) 
+    ((FILTER BIND HAVING) 
      . ,(lambda (block bindings)
-          (values (format "FILTER ~A" (swrite (cdr block) (nobreak bindings)))
-                  bindings)))
-    ((BIND) 
-     . ,(lambda (block bindings)
-          (values (format "BIND ~A" (swrite (cdr block) (nobreak bindings)))
+          (values (format "~A ~A" (car block) (swrite (cdr block) (nobreak bindings)))
                   bindings)))
     (,binary-operators
      . ,(lambda (block bindings)

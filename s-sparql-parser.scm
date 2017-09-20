@@ -348,9 +348,9 @@
 (define ANON
   (->node
    '@Blank
-    (concatenation (drop-consumed (lit/sp "["))
-        (drop-consumed (optional-sequence fws))
-        (drop-consumed (lit/sp "]")))))
+   (concatenation (drop-consumed (lit/sp "["))
+                  (drop-consumed (optional-sequence fws))
+                  (drop-consumed (lit/sp "]")))))
 
 (define WS
   (set
@@ -366,7 +366,7 @@
 
 (define ECHAR
   (concatenation (char-list/lit "\\")
-      (set-from-string "tbnrf\\\"'")))
+                 (set-from-string "tbnrf\\\"'")))
 
 (define STRING_LITERAL_LONG2
   (concatenation
@@ -465,19 +465,19 @@
    (concatenation (char-list/lit "+") INTEGER)))
 
 (define DOUBLE 
-   (alternatives
-    (concatenation
-     (repetition1 decimal)
-     (char-list/lit ".")
-     (repetition decimal)
-     EXPONENT)
-    (concatenation
-     (char-list/lit ".")
-     (repetition1 decimal)
-     EXPONENT)
-    (concatenation
-     (repetition1 decimal)
-     EXPONENT)))
+  (alternatives
+   (concatenation
+    (repetition1 decimal)
+    (char-list/lit ".")
+    (repetition decimal)
+    EXPONENT)
+   (concatenation
+    (char-list/lit ".")
+    (repetition1 decimal)
+    EXPONENT)
+   (concatenation
+    (repetition1 decimal)
+    EXPONENT)))
 
 (define DECIMAL
   (concatenation 
@@ -491,12 +491,12 @@
 (define LANGTAG 
   (bind-consumed->symbol
    (concatenation    
-     (char-list/lit "@")
-     (repetition1 char-list/alpha)
-     (repetition
-      (concatenation 
-       (char-list/lit "-")
-       (repetition1 char-list/alpha))))))
+    (char-list/lit "@")
+    (repetition1 char-list/alpha)
+    (repetition
+     (concatenation 
+      (char-list/lit "-")
+      (repetition1 char-list/alpha))))))
 
 (define VAR2
   (concatenation
@@ -511,18 +511,18 @@
 (define BLANK_NODE_LABEL
   (vac
    (concatenation
-   (char-list/lit "_:")
-   (alternatives
-    PN_CHARS_U
-    char-list/decimal)
-   (optional-sequence
-    (sandbox
-     (seq
-      (bstar 
-       (alternatives 
-        (char-list/lit ".") 
-        PN_CHARS))
-      PN_CHARS))))))
+    (char-list/lit "_:")
+    (alternatives
+     PN_CHARS_U
+     char-list/decimal)
+    (optional-sequence
+     (sandbox
+      (seq
+       (bstar 
+        (alternatives 
+         (char-list/lit ".") 
+         PN_CHARS))
+       PN_CHARS))))))
 
 (define PNAME_LN
   (vac
@@ -569,11 +569,11 @@
      STRING_LITERAL1 STRING_LITERAL2 STRING_LITERAL_LONG1 STRING_LITERAL_LONG2))))
 
 (define BooleanLiteral
-   (alternatives
-    (bind (lambda (s) (list #t))
-          (lit/sp "true"))
-    (bind (lambda (s) (list #f))
-          (lit/sp "false"))))
+  (alternatives
+   (bind (lambda (s) (list #t))
+         (lit/sp "true"))
+   (bind (lambda (s) (list #f))
+         (lit/sp "false"))))
 
 (define NumericLiteralUnsigned
   (between-fws 
@@ -664,19 +664,20 @@
 
 (define NotExistsFunc
   (vac
-  (->list
-   (concatenation
-    (bind-consumed->symbol
-     (concatenation 
-      (lit/sp "NOT ")
-      (lit/sp "EXISTS")))
-    GroupGraphPattern))))
+   (->list
+    (concatenation
+     (bind-consumed->symbol
+      (concatenation 
+       (lit/sp "NOT ")
+       (lit/sp "EXISTS")))
+     GroupGraphPattern))))
 
 (define ExistsFunc
   (vac
-   (concatenation
-    (lit/sym "EXISTS") 
-    GroupGraphPattern)))
+   (->list
+    (concatenation
+     (lit/sym "EXISTS") 
+     GroupGraphPattern))))
 
 (define (bracketted-call label N #!optional last-optional?)
   (bracketted-function
@@ -687,9 +688,9 @@
             ((= n N) (concatenation Expression (rec (- n 1))))
             ((and last-optional? (= n 1))
              (optional-sequence (concatenation (drop-consumed (lit/sp ",")) 
-                     Expression (rec (- n 1)))))
+                                               Expression (rec (- n 1)))))
             (else (concatenation (drop-consumed (lit/sp ",")) 
-                      Expression (rec (- n 1)))))))))
+                                 Expression (rec (- n 1)))))))))
 
 (define StrReplaceExpression (bracketted-call "REPLACE"  4 #t))
 
@@ -765,24 +766,24 @@
 
 (define PrimaryExpression
   (vac
-  (alternatives
-   NumericLiteral
-   BooleanLiteral
-   Var
-   RDFLiteral
-   BrackettedExpression
-   BuiltInCall
-   iriOrFunction 
-   )))
+   (alternatives
+    NumericLiteral
+    BooleanLiteral
+    Var
+    RDFLiteral
+    BrackettedExpression
+    BuiltInCall
+    iriOrFunction 
+    )))
 
 (define UnaryExpression
   (vac 
    (->list-if
-     (alternatives
-      (concatenation (lit/sym "!") PrimaryExpression)
-      (concatenation (lit/sym "+") PrimaryExpression)
-      (concatenation (lit/sym "-") PrimaryExpression)
-      PrimaryExpression))))
+    (alternatives
+     (concatenation (lit/sym "!") PrimaryExpression)
+     (concatenation (lit/sym "+") PrimaryExpression)
+     (concatenation (lit/sym "-") PrimaryExpression)
+     PrimaryExpression))))
 
 (define MultiplicativeExpression
   (->polish
@@ -832,31 +833,31 @@
 (define ConditionalAndExpression
   (vac 
    (->node-if
-     '&&
-     (concatenation 
-      ValueLogical
-      (repetition
-       (concatenation
-        (drop-consumed (lit/sp "&&"))
-        ValueLogical))))))
+    '&&
+    (concatenation 
+     ValueLogical
+     (repetition
+      (concatenation
+       (drop-consumed (lit/sp "&&"))
+       ValueLogical))))))
 
 (define ConditionalOrExpression
   (->node-if
-    '||
-    (concatenation 
-     ConditionalAndExpression
-     (repetition
-      (concatenation
-       (drop-consumed (lit/sp "||"))
-       ConditionalAndExpression)))))
+   '||
+   (concatenation 
+    ConditionalAndExpression
+    (repetition
+     (concatenation
+      (drop-consumed (lit/sp "||"))
+      ConditionalAndExpression)))))
 
 (define Expression
   (vac 
    ConditionalOrExpression))
-  
+
 (define GraphTerm
-   (alternatives
-    iri RDFLiteral NumericLiteral BooleanLiteral BlankNode NIL))
+  (alternatives
+   iri RDFLiteral NumericLiteral BooleanLiteral BlankNode NIL))
 
 (define Var
   (bind-consumed->symbol
@@ -917,7 +918,7 @@
      (drop-consumed (lit/sym "]"))))))
 
 (define TriplesNode
-   (alternatives Collection BlankNodePropertyList))
+  (alternatives Collection BlankNodePropertyList))
 
 (define Integer INTEGER)
 
@@ -939,30 +940,30 @@
     (concatenation
      (drop-consumed (lit/sp "("))
      (->node-if
-       '||
-       (concatenation 
-        PathOneInPropertySet
-        (repetition
-         (concatenation
-          (drop-consumed (lit/sp "|"))
-          PathOneInPropertySet))))
+      '||
+      (concatenation 
+       PathOneInPropertySet
+       (repetition
+        (concatenation
+         (drop-consumed (lit/sp "|"))
+         PathOneInPropertySet))))
      (drop-consumed (lit/sp ")"))))))
 
 (define PathPrimary
   (vac
-    (alternatives
-     iri
-     (lit/sym "a")
-     (->node
-      '!
-      (concatenation 
-       (drop-consumed (char-list/lit "!"))
-       PathNegatedPropertySet))
-     (->list
-      (concatenation
-       (drop-consumed (lit/sp "("))
-       Path
-       (drop-consumed (lit/sp ")")))))))
+   (alternatives
+    iri
+    (lit/sym "a")
+    (->node
+     '!
+     (concatenation 
+      (drop-consumed (char-list/lit "!"))
+      PathNegatedPropertySet))
+    (->list
+     (concatenation
+      (drop-consumed (lit/sp "("))
+      Path
+      (drop-consumed (lit/sp ")")))))))
 
 (define PathMod
   (bind-consumed->symbol
@@ -981,30 +982,30 @@
 
 (define PathElt
   (->prefix-if
-    (concatenation
-     PathPrimary
-     (optional-sequence PathMod))))
+   (concatenation
+    PathPrimary
+    (optional-sequence PathMod))))
 
 (define PathSequence
   (vac
    (->node-if
-     '/
-     (concatenation 
-      PathEltOrInverse
-      (repetition
-       (concatenation
-        (drop-consumed (lit/sp "/"))
-        PathEltOrInverse))))))
+    '/
+    (concatenation 
+     PathEltOrInverse
+     (repetition
+      (concatenation
+       (drop-consumed (lit/sp "/"))
+       PathEltOrInverse))))))
 
 (define PathAlternative
   (->node-if
-    '||
-    (concatenation 
-     PathSequence
-     (repetition
-      (concatenation
-       (drop-consumed (lit/sp "|"))
-       PathSequence)))))
+   '||
+   (concatenation 
+    PathSequence
+    (repetition
+     (concatenation
+      (drop-consumed (lit/sp "|"))
+      PathSequence)))))
 
 (define Path PathAlternative)
 
@@ -1012,12 +1013,12 @@
 
 (define	ObjectListPath
   (->list-if
-    (concatenation 
-     ObjectPath
-     (repetition
-      (concatenation
-       (drop-consumed (lit/sp ","))
-       ObjectPath)))))
+   (concatenation 
+    ObjectPath
+    (repetition
+     (concatenation
+      (drop-consumed (lit/sp ","))
+      ObjectPath)))))
 
 (define VerbSimple Var)
 
@@ -1057,11 +1058,11 @@
 (define ObjectList
   (->list-if
    (concatenation
-     Object
-     (repetition
-      (concatenation
-       (drop-consumed (lit/sp ","))
-       Object)))))
+    Object
+    (repetition
+     (concatenation
+      (drop-consumed (lit/sp ","))
+      Object)))))
 
 (define Verb (alternatives VarOrIri (lit/sym "a")))
 
@@ -1078,8 +1079,8 @@
       (optional-sequence
        (->list
         (concatenation
-          Verb
-          ObjectList))))))))
+         Verb
+         ObjectList))))))))
 
 (define PropertyList (optional-sequence PropertyListNotEmpty))
 
@@ -1147,13 +1148,13 @@
 (define GroupOrUnionGraphPattern
   (vac
    (->node-if
-     'UNION
-     (concatenation
-      (->list GroupGraphPattern)
-      (repetition 
-       (concatenation
-        (drop-consumed (lit/sp "UNION"))
-        (->list GroupGraphPattern)))))))
+    'UNION
+    (concatenation
+     (->list GroupGraphPattern)
+     (repetition 
+      (concatenation
+       (drop-consumed (lit/sp "UNION"))
+       (->list GroupGraphPattern)))))))
 
 (define MinusGraphPattern
   (vac
@@ -1204,12 +1205,12 @@
    (concatenation 
     (lit/sym "BIND")
     (->prefix-if
-      (concatenation 
-       (drop-consumed (lit/sp "("))
-       Expression
-       (lit/sym "AS")
-       Var
-       (drop-consumed (lit/sp ")")))))))
+     (concatenation 
+      (drop-consumed (lit/sp "("))
+      Expression
+      (lit/sym "AS")
+      Var
+      (drop-consumed (lit/sp ")")))))))
 
 (define ServiceGraphPattern
   (vac
@@ -1286,7 +1287,7 @@
      (concatenation
       (drop-consumed (lit/sp "."))
       (optional-sequence TriplesTemplate))))))
-  
+
 (define QuadsNotTriples
   (->list
    (concatenation
@@ -1350,7 +1351,7 @@
        (lit/sym "NAMED")
        iri))
      iri))))
-  
+
 (define InsertClause
   (->list
    (concatenation 
@@ -1371,7 +1372,7 @@
      (->list (concatenation (lit/sym "WITH") iri))))
    (alternatives 
     (concatenation DeleteClause
-        (optional-sequence InsertClause))
+                   (optional-sequence InsertClause))
     InsertClause)
    (->node '@Using (repetition UsingClause))
    (->list
@@ -1492,7 +1493,7 @@
 
 (define Update1
   (alternatives Load Clear Drop Add Move Copy Create 
-   InsertData DeleteData DeleteWhere Modify))
+                InsertData DeleteData DeleteWhere Modify))
 
 (define Update
   (vac
@@ -1537,11 +1538,12 @@
 
 (define OrderCondition
   (alternatives
-   (concatenation
-    (alternatives
-     (lit/sym "ASC")
-     (lit/sym "DESC"))
-    BrackettedExpression)
+   (->list
+    (concatenation
+     (alternatives
+      (lit/sym "ASC")
+      (lit/sym "DESC"))
+     BrackettedExpression))
    (alternatives Constraint Var)))
 
 (define OrderClause
@@ -1552,7 +1554,7 @@
       (lit/sp "ORDER ")
       (lit/sp "BY")))
     (repetition1 OrderCondition))))
-    
+
 (define HavingCondition Constraint)
 
 (define HavingClause
@@ -1567,14 +1569,14 @@
    FunctionCall
    (concatenation
     (->prefix-if
-      (concatenation 
-       (drop-consumed (lit/sp "("))
-       Expression
-       (optional-sequence
-        (concatenation
-         (lit/sym "AS")
-         Var))
-       (drop-consumed (lit/sp ")")))))
+     (concatenation 
+      (drop-consumed (lit/sp "("))
+      Expression
+      (optional-sequence
+       (concatenation
+        (lit/sym "AS")
+        Var))
+      (drop-consumed (lit/sp ")")))))
    Var))
 
 (define GroupClause
@@ -1615,12 +1617,12 @@
     (alternatives DefaultGraphClause NamedGraphClause))))
 
 (define AskQuery
-  (->list
-   (concatenation
-    (lit/sym "ASK")
-    (repetition DatasetClause)
-    WhereClause
-    SolutionModifier)))
+  (concatenation
+   (->list                             ; does this make sense? (ASK)
+    (lit/sym "ASK"))  
+   (->node '@Dataset (repetition DatasetClause))
+   (->list WhereClause)
+   SolutionModifier))
 
 (define DescribeQuery
   (concatenation
@@ -1630,9 +1632,9 @@
      (alternatives 
       (repetition1 VarOrIri)
       (lit/sym "*"))))
-    (->node '@Dataset (repetition DatasetClause))
-    (optional-sequence (->list WhereClause))
-    SolutionModifier))
+   (->node '@Dataset (repetition DatasetClause))
+   (optional-sequence (->list WhereClause))
+   SolutionModifier))
 
 (define ConstructQuery
   (alternatives
@@ -1656,24 +1658,24 @@
       SolutionModifier)))))
 
 (define SelectClause
-   (concatenation
-    (lit/sym "SELECT")
-    (optional-sequence                  ; in a list?
-     (alternatives 
-      (lit/sym "DISTINCT")
-      (lit/sym "REDUCED")))
-    (alternatives
-     (repetition1
-      (alternatives
-       Var
-       (->prefix-if
-	 (concatenation 
-	  (drop-consumed (lit/sp "("))
-	  Expression
-          (lit/sym "AS")
-	  Var
-	  (drop-consumed (lit/sp ")"))))))
-     (lit/sym "*"))))
+  (concatenation
+   (lit/sym "SELECT")
+   (optional-sequence                  ; in a list?
+    (alternatives 
+     (lit/sym "DISTINCT")
+     (lit/sym "REDUCED")))
+   (alternatives
+    (repetition1
+     (alternatives
+      Var
+      (->prefix-if
+       (concatenation 
+        (drop-consumed (lit/sp "("))
+        Expression
+        (lit/sym "AS")
+        Var
+        (drop-consumed (lit/sp ")"))))))
+    (lit/sym "*"))))
 
 (define SubSelect
   (->node
@@ -1685,11 +1687,11 @@
     ValuesClause)))
 
 (define SelectQuery
-   (concatenation
-    (->list SelectClause)
-    (->node '@Dataset (repetition DatasetClause))
-    (->list WhereClause) 
-    SolutionModifier))
+  (concatenation
+   (->list SelectClause)
+   (->node '@Dataset (repetition DatasetClause))
+   (->list WhereClause) 
+   SolutionModifier))
 
 (define PrefixDecl
   (->list
@@ -1710,7 +1712,7 @@
    (alternatives BaseDecl PrefixDecl)))
 
 (define UpdateUnit
-(->node '@UpdateUnit  Update))
+  (->node '@UpdateUnit  Update))
 
 (define Query
   (->node
@@ -1736,7 +1738,7 @@
 (define (parse-query query)
   (let ((parsed-query (lex TopLevel err query)))
     (if (equal? parsed-query '(error))
-        (error "Parse error.")
+        (error (format "Parse error on query:\n~A" query))
         (caar parsed-query))))
 
 (define (read-sparql query)
@@ -1752,7 +1754,7 @@
 
 (define (assoc-when sym alist)
   (and alist
-      (assoc sym alist)))
+       (assoc sym alist)))
 
 ;; (define (unit-query QueryUnit)
 ;;   (nested-alist-ref QueryUnit '@Unit '@Query))
