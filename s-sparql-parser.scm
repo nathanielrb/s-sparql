@@ -17,7 +17,6 @@
 
 ;; graphordefault - what usage/list?
 
-;; harmonize what level (between-fws) is used (for all terminals?)
 ;; - combine (->node-if (->node into single bind function (?)
 
 (use sparql-query
@@ -571,21 +570,26 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Grammar
 (define BlankNode
-   (alternatives BLANK_NODE_LABEL ANON))
+  (between-fws 
+   (alternatives 
+    BLANK_NODE_LABEL
+    ANON)))
 
 (define PrefixedName
   (bind-consumed->symbol
-   (alternatives PNAME_LN PNAME_NS)))
+   (between-fws
+    (alternatives PNAME_LN PNAME_NS))))
 
 (define iri
   (alternatives 
-   (bind-consumed->symbol IRIREF)
+   (bind-consumed->symbol (between-fws IRIREF))
    PrefixedName))
 
 (define String
   (bind-consumed->string
-   (alternatives
-    STRING_LITERAL1 STRING_LITERAL2 STRING_LITERAL_LONG1 STRING_LITERAL_LONG2)))
+   (between-fws 
+    (alternatives
+     STRING_LITERAL1 STRING_LITERAL2 STRING_LITERAL_LONG1 STRING_LITERAL_LONG2))))
 
 (define BooleanLiteral
    (alternatives
@@ -595,16 +599,19 @@
           (lit/sp "false"))))
 
 (define NumericLiteralUnsigned
-  (alternatives
-   INTEGER DECIMAL DOUBLE))
+  (between-fws 
+   (alternatives
+    INTEGER DECIMAL DOUBLE)))
 
 (define NumericLiteralPositive
-  (alternatives
-   INTEGER_POSITIVE DECIMAL_POSITIVE DOUBLE_POSITIVE))
+  (between-fws 
+   (alternatives
+    INTEGER_POSITIVE DECIMAL_POSITIVE DOUBLE_POSITIVE)))
 
 (define	NumericLiteralNegative 
-  (alternatives
-   INTEGER_NEGATIVE DECIMAL_NEGATIVE DOUBLE_NEGATIVE))
+  (between-fws 
+   (alternatives
+    INTEGER_NEGATIVE DECIMAL_NEGATIVE DOUBLE_NEGATIVE)))
 
 (define NumericLiteral
   (alternatives
@@ -824,15 +831,6 @@
 (define NumericExpression
   (vac AdditiveExpression))
 
-(define (relexp label op a b)
-  (->node
-   label
-   (::
-    (between-fws a)
-    (::
-     (drop-consumed op)
-     (between-fws b)))))
-
 (define RelationalExpression 
   (vac
    (->infix-if
@@ -889,7 +887,8 @@
 
 (define Var
   (bind-consumed->symbol
-   (alternatives VAR1 VAR2)))
+   (between-fws
+    (alternatives VAR1 VAR2))))
 
 (define VarOrIri
   (alternatives Var iri))
@@ -899,15 +898,13 @@
 
 (define GraphNodePath
   (vac
-   (between-fws 
-    (alternatives
-     VarOrTerm TriplesNodePath))))
+   (alternatives
+    VarOrTerm TriplesNodePath)))
 
 (define GraphNode
   (vac
-   (between-fws 
-    (alternatives
-     VarOrTerm TriplesNode))))
+   (alternatives
+    VarOrTerm TriplesNode)))
 
 (define CollectionPath
   (vac
@@ -1064,7 +1061,7 @@
     (::
      (->list
       (::
-       (between-fws (alternatives VerbPath VerbSimple))
+       (alternatives VerbPath VerbSimple)
        ObjectListPath))
      (:*
       (:: 
@@ -1072,7 +1069,7 @@
        (:?
         (->list
          (::
-          (between-fws (alternatives VerbPath VerbSimple))
+          (alternatives VerbPath VerbSimple)
           ObjectList)))))))))
 
 (define PropertyListPath
@@ -1081,11 +1078,11 @@
 (define TriplesSameSubjectPath
   (alternatives
    (:: 
-    (between-fws VarOrTerm)
-    (between-fws PropertyListPathNotEmpty))
+    VarOrTerm
+    PropertyListPathNotEmpty)
    (::
-    (between-fws TriplesNodePath)
-    (between-fws PropertyListPath))))
+    TriplesNodePath
+    PropertyListPath)))
 
 (define Object GraphNode)
 
@@ -1106,7 +1103,7 @@
    (::
     (->list 
      (::
-      (between-fws Verb)
+      Verb
       ObjectList))
     (:*
      (::
@@ -1114,19 +1111,19 @@
       (:?
        (->list
         (::
-         (between-fws Verb)
-         ObjectList))))))))
+          Verb
+          ObjectList))))))))
 
 (define PropertyList (:? PropertyListNotEmpty))
 
 (define TriplesSameSubject
   (alternatives
    (:: 
-    (between-fws VarOrTerm)
-    (between-fws PropertyListNotEmpty))
+    VarOrTerm
+    PropertyListNotEmpty)
    (::
-    (between-fws TriplesNode)
-    (between-fws PropertyList))))
+    TriplesNode
+    PropertyList)))
 
 (define ConstructTriples
   (vac
@@ -1205,7 +1202,7 @@
     (->list
      (::      
       (drop-consumed (lit/sp "("))
-      (:* (between-fws Var))
+      (:* Var)
       (drop-consumed (lit/sp ")")))))
    (::
     (drop-consumed (lit/sp "{"))
@@ -1214,7 +1211,7 @@
       (->list
        (::
         (drop-consumed (lit/sp "("))
-        (:* (between-fws DataBlockValue))
+        (:*  DataBlockValue)
         (drop-consumed (lit/sp ")"))))
       NIL))
     (drop-consumed (lit/sp "}")))))
@@ -1223,7 +1220,7 @@
   (::
    Var
    (drop-consumed (lit/sp "{"))
-   (:* (between-fws DataBlockValue))
+   (:* DataBlockValue)
    (drop-consumed (lit/sp "}"))))
 
 (define DataBlock
@@ -1560,7 +1557,7 @@
      (::
       (lit/sp "ORDER ")
       (lit/sp "BY")))
-    (:+ (between-fws OrderCondition)))))
+    (:+ OrderCondition))))
     
 (define HavingCondition Constraint)
 
@@ -1673,17 +1670,16 @@
       (lit/sp "SELECT")))
     (alternatives
      (:+
-      (between-fws 
-       (alternatives
-	Var
-        (->infix-if
-         (->list
+      (alternatives
+       Var
+       (->infix-if
+        (->list
 	 (:: 
 	  (drop-consumed (lit/sp "("))
 	  Expression
           (lit/sym "AS")
 	  Var
-	  (drop-consumed (lit/sp ")"))))))))
+	  (drop-consumed (lit/sp ")")))))))
      (lit/sym "*"))))
 
 (define SubSelect
