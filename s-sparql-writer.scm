@@ -107,7 +107,9 @@
                  (else
                   (write-sparql (cdr exp)))))))
 
-(define binary-operators '(+ - * / = != <= >= < > && \|\|))
+(define arithmetic-operators '(+ - * /))
+
+(define binary-operators '(= != <= >= < > && \|\|))
 
 (define (write-sparql-binary exp)
   (and (member (car exp) binary-operators)
@@ -158,6 +160,7 @@
 	      " ")))
     (else #f)))
 
+;; is this useful?
 (define (sparql exp #!optional (level 0))
   (or (write-sparql-blank-node exp)
       (write-sparql-element exp)
@@ -320,6 +323,24 @@
      . ,(lambda (block bindings)
           (values (format "~A ~A" (car block) (swrite (cdr block) (nobreak bindings)))
                   bindings)))
+    ((+ -)
+     . ,(lambda (block bindings)
+          (match block
+            ((op . rest)
+             (if (= (length rest) 1)
+                 (values (format "~A~A" op (car rest)) bindings)
+                 (values (string-join
+                          (map (compose swrite list) rest)
+                          (format " ~A "(symbol->string op)))
+                      bindings))))))
+    ((* /)
+     . ,(lambda (block bindings)
+          (match block
+            ((op . rest)
+             (values (string-join
+                      (map (compose swrite list) rest)
+                      (format " ~A "(symbol->string op)))
+                     bindings)))))
     (,binary-operators
      . ,(lambda (block bindings)
           (values (format "(~A ~A ~A)"

@@ -48,7 +48,8 @@
 ;; helper macro for mutually-recursive parser definitions
 (define-syntax vac
   (syntax-rules ()
-    ((_ fn) (lambda args (apply fn args)))))
+;;    ((_ fn) (lambda args (apply fn args)))))
+    ((_ fn) (lambda args (print "trying " args) (apply fn args)))))
 
 (define fws
   (concatenation
@@ -174,14 +175,17 @@
     ((_ p)    (bind (consumed-values->list list->cons) p))
     ))
 
+(define sparql-number-parser
+  (make-parameter string->symbol))
+
 (define consumed-chars->number
   (consumed-chars->list 
    (compose string->symbol list->string)))
 
 (define-syntax ->number
   (syntax-rules () 
-    ((_ p)    (bind consumed-chars->number p))
-    ))
+    ((_ p)    (bind (consumed-chars->list 
+                     (compose (sparql-number-parser) list->string)) p))))
 
 ;; (define (number->negative l)
 ;;   (and (number? (car l)) (- (car l))))
@@ -576,22 +580,25 @@
          (lit/sp "false"))))
 
 (define NumericLiteralUnsigned
-  (between-fws 
-   (->number
-    (alternatives
-     DOUBLE DECIMAL INTEGER))))
+  (vac
+   (between-fws 
+    (->number
+     (alternatives
+      DOUBLE DECIMAL INTEGER)))))
 
 (define NumericLiteralPositive
-  (between-fws 
-   (->number
-    (alternatives
-     DOUBLE_POSITIVE DECIMAL_POSITIVE INTEGER_POSITIVE))))
+  (vac
+   (between-fws 
+    (->number
+     (alternatives
+      DOUBLE_POSITIVE DECIMAL_POSITIVE INTEGER_POSITIVE)))))
 
 (define	NumericLiteralNegative 
-  (between-fws 
-   (->number
-    (alternatives
-     DOUBLE_NEGATIVE DECIMAL_NEGATIVE INTEGER_NEGATIVE))))
+  (vac
+   (between-fws 
+    (->number
+     (alternatives
+      DOUBLE_NEGATIVE DECIMAL_NEGATIVE INTEGER_NEGATIVE)))))
 
 (define NumericLiteral
   (alternatives
@@ -783,7 +790,8 @@
      (concatenation (lit/sym "!") PrimaryExpression)
      (concatenation (lit/sym "+") PrimaryExpression)
      (concatenation (lit/sym "-") PrimaryExpression)
-     PrimaryExpression))))
+     PrimaryExpression
+     ))))
 
 (define MultiplicativeExpression
   (->polish
