@@ -259,7 +259,9 @@
     ((@Dataset @Using) . ,sw/obj)
     ((FROM USING) 
      . ,(lambda (block bindings)
-          (values (string-join (map symbol->string block)) bindings)))
+          ;; (values (string-join (map symbol->string block)) bindings)))
+          (values (format "~A ~A" (car block) (swrite (second block) (nobreak (sep " " bindings)))) 
+                  bindings)))
     ((PREFIX) . ,sw/copy)
     ((SELECT |SELECT DISTINCT| |SELECT REDUCED| DESCRIBE ASK
       LOAD CLEAR DROP CREATE ADD MOVE COPY)
@@ -294,11 +296,8 @@
       EXISTS |NOT EXISTS| MINUS OPTIONAL)
      . ,(lambda (block bindings)
 	  (values (format "~A ~A" 
-			  ;;(pre bindings)
 			  (car block)
-			  (swrite (list (cdr block)) (nobreak bindings))
-			  ;;(pre bindings))
-			  )
+			  (swrite (list (cdr block)) (nobreak bindings)))
 		  bindings)))
     ((GRAPH) 
      . ,(lambda (block bindings)
@@ -316,7 +315,7 @@
 		  bindings)))
     (,triple? 
      . ,(lambda (triple bindings)
-	  (values (write-triple triple) '())))
+	  (values (write-triple triple) bindings)))
     ((FILTER BIND HAVING) 
      . ,(lambda (block bindings)
           (values (format "~A ~A" (car block) (swrite (cdr block) (nobreak bindings)))
