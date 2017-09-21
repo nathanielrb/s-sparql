@@ -14,14 +14,7 @@
 (define *default-graph*
   (make-parameter #f))
 
-(define *print-queries?*
-  (make-parameter
-   (let ((val (get-environment-variable "PRINT_SPARQL_QUERIES")))
-     (if val
-         (match val
-           ((or #t "true" "True" "TRUE") #t)
-           ((or #f "false" "False" "FALSE") #f))
-         #t))))
+(define *print-queries?* (make-parameter #t))
 
 (define *namespaces* (make-parameter '()))
 
