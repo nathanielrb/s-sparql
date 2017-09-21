@@ -266,8 +266,6 @@
           (sw/obj block (sep "" bindings))))
     ((@UpdateUnit)
      . ,(lambda (block bindings)
-          (print (length (cdr block)))
-          (print (sep ";" bindings))
           (sw/obj block (sep ";" bindings))))
     ((@Dataset @Using) . ,sw/obj)
     ((FROM USING) 
