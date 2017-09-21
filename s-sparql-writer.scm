@@ -83,9 +83,11 @@
         ((pair? exp) (or (write-sparql-typed-literal exp)
                          (write-sparql-path exp)))))
 
+;; better to parse this...
 (define aggregates
   '(COUNT SUM MIN MAX AVG SAMPLE GROUP_CONCAT))
 
+;; better to parse this...
 (define functions
   '(STR LANG LANGMATCHES DATATYPE BOUND IRI URI BNODE RAND NIL ABS CEIL FLOOR ROUND IF CONCAT STRLEN UCASE LCASE ENCODE_FOR_URI CONTAINS STRSTARTS STRENDS STRBEFORE STRAFTER YEAR MONTH DAY HOURS MINUTES SECONDS TIMEZONE TZ NOW NIL UUID NIL STRUUID NIL MD5 SHA1 SHA256 SHA384 SHA512 COALESCE  STRLANG STRDT isIRI isURI isBLANK isLITERAL isNUMERIC REGEX SUBSTR REPLACE
     str lang langmatches datatype

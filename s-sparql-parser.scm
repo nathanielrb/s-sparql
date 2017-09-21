@@ -1511,13 +1511,13 @@
   (->list
    (concatenation
     (lit/sym "OFFSET")
-    (between-fws INTEGER))))
+    (->number (between-fws INTEGER)))))
 
 (define LimitClause
   (->list
    (concatenation
     (lit/sym "LIMIT")
-    (between-fws INTEGER))))
+    (->number (between-fws INTEGER)))))
 
 (define LimitOffsetClauses
   (alternatives
