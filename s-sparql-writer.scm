@@ -176,16 +176,15 @@
 (define (swrite block #!optional (bindings '()) (rules (*rules*)))
   (let ((cj (lambda (a b)
 	      (cond ((equal? b "") a)
-		    ;;((equal? a "") b)
-		    ((equal? (substring b 0 1) "\n") (conc a b))
+		    ;; ((equal? (substring b 0 1) "\n") (conc a b))
 		    (else
-		  (conc a
-			(if (equal? a "") ""
-			    (get-binding/default 'separator bindings ""))
-			(if (get-binding 'linebreak bindings) 
-                            (conc "\n" (pre bindings))
-                            "")
-			b))))))
+                     (conc a
+                           (if (equal? a "") ""
+                               (get-binding/default 'separator bindings ""))
+                           (if (get-binding 'linebreak bindings) 
+                               (conc "\n" (pre bindings))
+                               "")
+                           b))))))
     (rewrite* block bindings rules cj  "")))
 
 (define (sep s bindings)
@@ -251,7 +250,7 @@
 	    bindings))
 
 (define (sw/literal exp bindings)
-  (values (->string exp) '()))
+  (values (->string exp) bindings))
 
 (define (sw/block proc)
   (lambda (block bindings)
@@ -262,7 +261,14 @@
   `((,symbol? . ,sw/literal)
     (,number? . ,sw/literal)
     (,string? . ,(lambda (str bindings) (values (sparql str) bindings)))
-    ((@QueryUnit @UpdateUnit @Query @Update @SubSelect @Prologue) . ,sw/obj)
+    ((@QueryUnit @Query @Update @SubSelect @Prologue) 
+     . ,(lambda (block bindings)
+          (sw/obj block (sep "" bindings))))
+    ((@UpdateUnit)
+     . ,(lambda (block bindings)
+          (print (length (cdr block)))
+          (print (sep ";" bindings))
+          (sw/obj block (sep ";" bindings))))
     ((@Dataset @Using) . ,sw/obj)
     ((FROM USING) 
      . ,(lambda (block bindings)
