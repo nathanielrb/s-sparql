@@ -71,11 +71,11 @@
   `(error))
 
 (define (lit/sp str)
-  (between-fws (char-list/lit str)))
+  (between-fws (char-list/:s str)))
 
 (define (lit/sym str)
   (bind-consumed->symbol
-   (between-fws (char-list/lit str))))
+   (between-fws (char-list/:s str))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Backtracking
@@ -169,7 +169,7 @@
 (define-syntax ->number
   (syntax-rules () 
     ((_ p)    (bind (consumed-chars->list 
-                     (compose (sparql-number-parser) list->string)) p))))
+                      (compose (sparql-number-parser) list->string)) p))))
 
 ;; (define (number->negative l)
 ;;   (and (number? (car l)) (- (car l))))
@@ -235,7 +235,7 @@
 ;; Terminals
 (define PN_LOCAL_ESC
   (concatenation
-   (char-list/lit "\\")
+   (char-list/:s "\\")
    (set-from-string "_~.-!$&'()*+,;=/?#@%")))
 
 (define HEX hexadecimal)
@@ -243,7 +243,7 @@
 ;; how should this be represented?
 (define PERCENT
   (concatenation
-   (char-list/lit "%") HEX HEX))
+   (char-list/:s "%") HEX HEX))
 
 (define PLX
   (alternatives PERCENT PN_LOCAL_ESC))
@@ -253,7 +253,7 @@
    (concatenation
     (alternatives 
      PN_CHARS_U
-     (char-list/lit ":")
+     (char-list/:s ":")
      char-list/decimal
      PLX)
     (optional-sequence
@@ -265,7 +265,7 @@
          PN_CHARS PLX))
        (alternatives 
         PN_CHARS
-        (char-list/lit ":") 
+        (char-list/:s ":") 
         PLX)))))))
 
 (define PN_PREFIX
@@ -277,7 +277,7 @@
       (concatenation
        (bstar
         (alternatives
-         (char-list/lit ".") 
+         (char-list/:s ".") 
          PN_CHARS)) 
        PN_CHARS))))))
 
@@ -287,7 +287,7 @@
     PN_CHARS_U
     (set-from-string "-")
     char-list/decimal
-    (char-list/lit "·")
+    (char-list/:s "·")
     (set
      (char-set-union
       (ucs-range->char-set #x0300 #x036F)
@@ -353,34 +353,34 @@
     (drop-consumed (lit/sp ")")))))
 
 (define ECHAR
-  (concatenation (char-list/lit "\\")
+  (concatenation (char-list/:s "\\")
                  (set-from-string "tbnrf\\\"'")))
 
 (define STRING_LITERAL_LONG2
   (concatenation
-   (char-list/lit "\"\"\"")
+   (char-list/:s "\"\"\"")
    (repetition
     (concatenation
      (optional-sequence
       (alternatives 
-       (char-list/lit "\"")
-       (char-list/lit "\"\"")))
+       (char-list/:s "\"")
+       (char-list/:s "\"\"")))
      (alternatives
       (set
        (char-set-complement
         (string->char-set "\"\\")))
       ECHAR)))
-   (char-list/lit "\"\"\"")))
+   (char-list/:s "\"\"\"")))
 
 (define STRING_LITERAL_LONG1
   (concatenation
-   (char-list/lit "'''")
+   (char-list/:s "'''")
    (repetition
     (concatenation
      (optional-sequence
       (alternatives 
-       (char-list/lit "'")
-       (char-list/lit "''")))
+       (char-list/:s "'")
+       (char-list/:s "''")))
      (alternatives
       (set 
        (char-set-complement
@@ -390,7 +390,7 @@
 
 (define STRING_LITERAL2
   (concatenation
-   (drop-consumed (char-list/lit "\""))
+   (drop-consumed (char-list/:s "\""))
    (repetition
     (alternatives
      (set
@@ -398,11 +398,11 @@
        (list->char-set
         (list #\" #\\ #\newline #\return))))
      ECHAR))
-   (drop-consumed (char-list/lit "\""))))
+   (drop-consumed (char-list/:s "\""))))
 
 (define STRING_LITERAL1
   (concatenation
-   (char-list/lit "'")
+   (char-list/:s "'")
    (repetition
     (alternatives
      (set 
@@ -410,7 +410,7 @@
        (list->char-set
         (list #\' #\\ #\newline #\return))))
      ECHAR))
-   (char-list/lit "'")))
+   (char-list/:s "'")))
 
 (define EXPONENT
   (concatenation
@@ -421,46 +421,46 @@
 (define DOUBLE_NEGATIVE
   (vac
    (concatenation
-    (char-list/lit "-")
+    (char-list/:s "-")
     DOUBLE)))
 
 (define DECIMAL_NEGATIVE
   (vac
    (concatenation
-    (char-list/lit "-")
+    (char-list/:s "-")
     DECIMAL)))
 
 (define INTEGER_NEGATIVE
   (vac
    (concatenation
-    (char-list/lit "-")
+    (char-list/:s "-")
     INTEGER)))
 
 (define DOUBLE_POSITIVE
   (vac
    (concatenation
-    (char-list/lit "+")
+    (char-list/:s "+")
     DOUBLE)))
 
 (define DECIMAL_POSITIVE
   (vac
    (concatenation
-    (char-list/lit "+") 
+    (char-list/:s "+") 
     DECIMAL)))
 
 (define INTEGER_POSITIVE
   (vac
-   (concatenation (char-list/lit "+") INTEGER)))
+   (concatenation (char-list/:s "+") INTEGER)))
 
 (define DOUBLE 
   (alternatives
    (concatenation
     (repetition1 decimal)
-    (char-list/lit ".")
+    (char-list/:s ".")
     (repetition decimal)
     EXPONENT)
    (concatenation
-    (char-list/lit ".")
+    (char-list/:s ".")
     (repetition1 decimal)
     EXPONENT)
    (concatenation
@@ -470,7 +470,7 @@
 (define DECIMAL
   (concatenation 
    (repetition char-list/decimal)
-   (char-list/lit ".")
+   (char-list/:s ".")
    (repetition1 char-list/decimal)))
 
 (define INTEGER 
@@ -479,27 +479,27 @@
 (define LANGTAG 
   (bind-consumed->symbol
    (concatenation    
-    (char-list/lit "@")
+    (char-list/:s "@")
     (repetition1 char-list/alpha)
     (repetition
      (concatenation 
-      (char-list/lit "-")
+      (char-list/:s "-")
       (repetition1 char-list/alpha))))))
 
 (define VAR2
   (concatenation
-   (char-list/lit "$")
+   (char-list/:s "$")
    VARNAME))
 
 (define VAR1
   (concatenation
-   (char-list/lit "?")
+   (char-list/:s "?")
    VARNAME))
 
 (define BLANK_NODE_LABEL
   (vac
    (concatenation
-    (char-list/lit "_:")
+    (char-list/:s "_:")
     (alternatives
      PN_CHARS_U
      char-list/decimal)
@@ -508,7 +508,7 @@
       (seq
        (bstar 
         (alternatives 
-         (char-list/lit ".") 
+         (char-list/:s ".") 
          PN_CHARS))
        PN_CHARS))))))
 
@@ -519,18 +519,18 @@
 (define PNAME_NS
   (concatenation 
    (optional-sequence PN_PREFIX)
-   (char-list/lit ":")))
+   (char-list/:s ":")))
 
 (define IRIREF 
   (concatenation
-   (char-list/lit "<")
+   (char-list/:s "<")
    (repetition
     (set
      (char-set-difference
       (char-set-complement
        (list->char-set (list #\< #\> #\{ #\} #\| #\^ #\` #\\)))
       (ucs-range->char-set #x00 #x20))))
-   (char-list/lit ">")))
+   (char-list/:s ">")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Grammar
@@ -596,7 +596,7 @@
      (alternatives
       LANGTAG
       (concatenation
-       (drop-consumed (char-list/lit "^^"))
+       (drop-consumed (char-list/:s "^^"))
        iri))))))
 
 (define iriOrFunction
@@ -949,7 +949,7 @@
     (->node
      '!
      (concatenation 
-      (drop-consumed (char-list/lit "!"))
+      (drop-consumed (char-list/:s "!"))
       PathNegatedPropertySet))
     (->list
      (concatenation
@@ -961,7 +961,7 @@
   (bind-consumed->symbol
    (concatenation
     (set-from-string "?*+")
-    (drop-consumed (char-list/lit " "))))) ; avoid matching following ?var
+    (drop-consumed (char-list/:s " "))))) ; avoid matching following ?var
 
 (define PathEltOrInverse
   (vac

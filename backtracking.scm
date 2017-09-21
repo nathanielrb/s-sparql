@@ -223,6 +223,28 @@
 
 (define (bopt pat) (bbar pat pass))
 
+(define (bstar p)
+  (lambda (sk fk strm)
+    (let ((try
+           (lambda (s)
+             (let ((ss (sk s)))		      
+               (if (equal? ss '(error)) #f
+                   ss)))))
+      (p (lambda (strm1)
+           (or 
+            ((bstar p) try try strm1)
+            (sk strm1)))
+         sk
+         strm))))
+
+(define (sandbox p)
+  (let ((err (lambda (s) '(error))))
+    (lambda (sk fk strm)
+      (let ((s (p values err strm)))
+        (if (equal? s '(error))
+            (fk strm)
+            (sk s))))))
+
 (define-syntax test
   (syntax-rules ()
     ((_  answer exp)
@@ -245,13 +267,13 @@
       (lex (seq (bstar (lit "a")) (lit "b")) er "aaaaa"))
 
 (test '((a a a a a) ())
-      (lex (bopt (seq (bstar (lit "a")) (lit "a"))) er "aaaaa"))
+      (lex (opt (sandbox (seq (bstar (lit "a")) (lit "a")))) er "aaaaa"))
 
 (test '((a a a a a) (b))
-      (lex (bopt (seq (bstar (lit "a")) (lit "a"))) er "aaaaab"))
+      (lex (opt (sandbox (seq (bstar (lit "a")) (lit "a")))) er "aaaaab"))
 
 (test '(() (a a a a a b))
-      (lex (bopt (seq (bstar (lit "a")) (lit "b"))) er "aaaaaa"))
+      (lex (opt (sandbox (seq (bstar (lit "a")) (lit "b")))) er "aaaaaa"))
 
 (test '((a a a a a b) ())
-      (lex (bopt (seq (bstar (lit "a")) (lit "b"))) er "aaaaab"))
+      (lex (opt (sandbox (seq (bstar (lit "a")) (lit "b")))) er "aaaaab"))
