@@ -260,6 +260,7 @@
 (define srules
   `((,symbol? . ,sw/literal)
     (,number? . ,sw/literal)
+    (,null? . ,(lambda (block bindings) (values "{}" bindings))) ; correct?
     (,string? . ,(lambda (str bindings) (values (sparql str) bindings)))
     ((@QueryUnit @Query @Update @SubSelect @Prologue) 
      . ,(lambda (block bindings)
