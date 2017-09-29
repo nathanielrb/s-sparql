@@ -10,17 +10,19 @@
       (write-uri ns-pair)
       (expand-namespace* ns-pair namespaces)))
 
-(define (expand-namespace* ns-pair namespaces)
-  (let ((pair (string-split (->string ns-pair) ":")))
-    (format #f "~A~A"
-            (lookup-namespace (string->symbol (car pair)) namespaces)
-            (cadr pair))))
+(define (expand-namespace* pair namespaces)
+  (format #f "~A~A"
+          (lookup-namespace (string->symbol (car pair)) namespaces)
+          (cadr pair)))
 
 (define (expand-namespace ns-pair #!optional (namespaces (*namespaces*)))
   (if (or (sparql-variable? ns-pair)  (s-iri? ns-pair))
       ns-pair
-      (string->symbol
-       (format #f "<~A>" (expand-namespace* ns-pair namespaces)))))               
+      (let ((pair (string-split (->string ns-pair) ":")))
+        (if (equal? (length pair) 2)
+            (string->symbol
+             (format #f "<~A>" (expand-namespace* pair namespaces)))
+            ns-pair))))
 
 (define (rdf->json exp)
   (cond ((symbol? exp) (write-uri exp))
