@@ -274,7 +274,7 @@
     ((FROM USING) 
      . ,(lambda (block bindings)
           ;; (values (string-join (map symbol->string block)) bindings)))
-          (values (format "~A ~A" (car block) (swrite (second block) (nobreak (sep " " bindings)))) 
+          (values (format "~A ~A" (car block) (swrite (cdr block) (nobreak (sep " " bindings)))) 
                   bindings)))
     ((PREFIX) . ,sw/copy)
     ((SELECT |SELECT DISTINCT| |SELECT REDUCED| DESCRIBE ASK
