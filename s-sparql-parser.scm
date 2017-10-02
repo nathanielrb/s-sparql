@@ -73,9 +73,22 @@
 (define (lit/sp str)
   (between-fws (char-list/:s str)))
 
+;; (define (lit/sym str)
+;;   (bind-consumed->symbol
+;;    (between-fws (char-list/:s str))))
+
 (define (lit/sym str)
-  (bind-consumed->symbol
-   (between-fws (char-list/:s str))))
+  (let ((sym (string->symbol str)))
+    (bind (lambda (cs) (list sym))
+          (drop-consumed
+           (between-fws 
+            (char-list/:s str))))))
+
+(define (symbol-concatenation p)
+  (bind
+   ((consumed-objects-lift (consumed-objects symbol?)) 
+    (cut apply symbol-append <>))   
+   p))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Backtracking
@@ -657,10 +670,11 @@
   (vac
    (->list
     (concatenation
-     (bind-consumed->symbol
+     ;; (bind-consumed->symbol
+     (symbol-concatenation
       (concatenation 
-       (lit/sp "NOT ")
-       (lit/sp "EXISTS")))
+       (lit/sym "NOT ")
+       (lit/sym "EXISTS")))
      GroupGraphPattern))))
 
 (define ExistsFunc
@@ -814,10 +828,11 @@
        (concatenation (lit/sym ">=") NumericExpression)
        (concatenation (lit/sym "<=") NumericExpression)
        (concatenation (lit/sym "IN") ExpressionList)
-       (concatenation 
-        (bind-consumed->symbol
+       (concatenation
+        ;;(bind-consumed->symbol
+        (symbol-concatenation 
          (concatenation
-          (lit/sp "NOT ") (lit/sp "IN")))
+          (lit/sym "NOT ") (lit/sym "IN")))
         ExpressionList)))))))
 
 (define ValueLogical RelationalExpression)
@@ -1209,10 +1224,11 @@
    (->list
     (concatenation
      (alternatives
-      (bind-consumed->symbol
+      (symbol-concatenation
+      ;;(bind-consumed->symbol
        (concatenation 
-        (lit/sp "SERVICE ") 
-        (lit/sp "SILENT")))
+        (lit/sym "SERVICE ") 
+        (lit/sym "SILENT")))
       (lit/sym "SERVICE"))
      VarOrIri
      GroupGraphPattern))))
@@ -1374,39 +1390,43 @@
 
 (define DeleteWhere
   (->list
-   (concatenation 
-    (bind-consumed->symbol
+   (concatenation
+    ;; (bind-consumed->symbol
+    (symbol-concatenation 
      (concatenation
-      (lit/sp "DELETE ")
-      (lit/sp "WHERE")))
+      (lit/sym "DELETE ")
+      (lit/sym "WHERE")))
     QuadData)))
 
 (define DeleteData 
   (->list
-   (concatenation 
-    (bind-consumed->symbol
+   (concatenation
+    ;;(bind-consumed->symbol
+    (symbol-concatenation 
      (concatenation
-      (lit/sp "DELETE ")
-      (lit/sp "DATA")))
+      (lit/sym "DELETE ")
+      (lit/sym "DATA")))
     QuadData)))
 
 (define InsertData
   (->list
    (concatenation 
-    (bind-consumed->symbol
+    ;;(bind-consumed->symbol
+    (symbol-concatenation 
      (concatenation
-      (lit/sp "INSERT ")
-      (lit/sp "DATA")))
+      (lit/sym "INSERT ")
+      (lit/sym "DATA")))
     QuadData)))
 
 (define Copy
   (->list
    (concatenation
     (alternatives
-     (bind-consumed->symbol
-      (concatenation 
-       (lit/sp "COPY ")
-       (lit/sp "SILENT")))
+     ;;(bind-consumed->symbol
+      (symbol-concatenation 
+       (concatenation
+        (lit/sym "COPY ")
+        (lit/sym "SILENT")))
      (lit/sym "COPY"))
     GraphOrDefault
     (lit/sym "TO")
@@ -1415,10 +1435,11 @@
 (define Move
   (concatenation
    (alternatives
-    (bind-consumed->symbol
+    ;;(bind-consumed->symbol
+    (symbol-concatenation
      (concatenation
-      (lit/sp "MOVE ")
-      (lit/sp "SILENT")))
+      (lit/sym "MOVE ")
+      (lit/sym "SILENT")))
     (lit/sym "MOVE"))
    GraphOrDefault
    (lit/sym "TO")
@@ -1428,10 +1449,11 @@
   (->list
    (concatenation
     (alternatives
-     (bind-consumed->symbol
+     ;;(bind-consumed->symbol
+     (symbol-concatenation
       (concatenation 
-       (lit/sp "ADD ")
-       (lit/sp "SILENT")))
+       (lit/sym "ADD ")
+       (lit/sym "SILENT")))
      (lit/sym "ADD"))
     GraphOrDefault
     (lit/sym "TO")
@@ -1441,10 +1463,11 @@
   (->list
    (concatenation
     (alternatives
-     (bind-consumed->symbol
+     ;; (bind-consumed->symbol
+     (symbol-concatenation
       (concatenation
-       (lit/sp "CREATE ")
-       (lit/sp "SILENT")))
+       (lit/sym "CREATE ")
+       (lit/sym "SILENT")))
      (lit/sym "CREATE"))
     GraphRef)))
 
@@ -1452,10 +1475,11 @@
   (->list
    (concatenation
     (alternatives
-     (bind-consumed->symbol
+     ;; (bind-consumed->symbol
+     (symbol-concatenation
       (concatenation
-       (lit/sp "DROP ")
-       (lit/sp "SILENT")))
+       (lit/sym "DROP ")
+       (lit/sym "SILENT")))
      (lit/sym "DROP"))
     GraphRefAll)))
 
@@ -1463,10 +1487,11 @@
   (->list
    (concatenation
     (alternatives
-     (bind-consumed->symbol
+     ;; (bind-consumed->symbol
+     (symbol-concatenation
       (concatenation
-       (lit/sp "CLEAR ")
-       (lit/sp "SILENT")))
+       (lit/sym "CLEAR ")
+       (lit/sym "SILENT")))
      (lit/sym "CLEAR"))
     GraphRefAll)))
 
@@ -1474,10 +1499,11 @@
   (->list
    (concatenation
     (alternatives
-     (bind-consumed->symbol
+     ;; (bind-consumed->symbol
+     (symbol-concatenation
       (concatenation
-       (lit/sp "LOAD ")
-       (lit/sp "SILENT")))
+       (lit/sym "LOAD ")
+       (lit/sym "SILENT")))
      (lit/sym "LOAD"))
     iri
     (lit/sym "INTO")
@@ -1541,10 +1567,11 @@
 (define OrderClause
   (->list
    (concatenation
-    (bind-consumed->symbol 
+    ;; (bind-consumed->symbol 
+    (symbol-concatenation
      (concatenation
-      (lit/sp "ORDER ")
-      (lit/sp "BY")))
+      (lit/sym "ORDER ")
+      (lit/sym "BY")))
     (repetition1 OrderCondition))))
 
 (define HavingCondition Constraint)
@@ -1574,10 +1601,11 @@
 (define GroupClause
   (->list
    (concatenation
-    (bind-consumed->symbol 
+    (symbol-concatenation
+     ;;(bind-consumed->symbol 
      (concatenation
-      (lit/sp "GROUP ")
-      (lit/sp "BY")))
+      (lit/sym "GROUP ")
+      (lit/sym "BY")))
     (repetition1 GroupCondition))))
 
 (define SolutionModifier
