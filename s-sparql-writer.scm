@@ -380,7 +380,7 @@
                         (string-join
                          (map paren-if vals)))
                 bindings))))))
-    ((LIMIT OFFSET |GROUP BY|)
+    ((LIMIT OFFSET |GROUP BY| |ORDER BY|)
      . ,(lambda (block bindings)
           (values (format "~A ~A" (car block) (swrite (cdr block) (nobreak (sep " " bindings))))
                   bindings)))
