@@ -297,7 +297,7 @@
            (format "~A(~A)" (car block)
                    (swrite (cdr block) (zero (sep " " bindings))))
            bindings)))
-    ((DISTINCT NAMED)
+    ((DISTINCT NAMED WITH)
      . ,(lambda (block bindings)
           (values
            (format "~A ~A" (car block) (swrite (cdr block)))
