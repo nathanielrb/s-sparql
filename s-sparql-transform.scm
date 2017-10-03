@@ -383,7 +383,7 @@
 (define (all-prologues queries)
   (join
    (map (lambda (query)
-          (alist-ref '@Prologue (cdr query)))
+          (or (alist-ref '@Prologue (cdr query)) '()))
         queries)))
 
 (define (query-prefixes QueryUnit)
