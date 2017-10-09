@@ -83,10 +83,11 @@
 	    MINUS OPTIONAL UNION GRAPH)))
 
 (define (blank-node? obj)
-  (and (pair? obj)
-       (symbol? (car obj))
-       ;;(or (equal? "_:" (substring (->string (car obj)) 0 2))
-       (equal? (car obj) '@Blank)))
+  (or (and (pair? obj)
+           (symbol? (car obj))
+           (equal? (car obj) '@Blank))
+      (and (symbol? obj)
+           (equal? "_:" (substring (->string obj) 0 2)))))
 
 (define (blank-node-path? obj)
   (and (list? obj)
