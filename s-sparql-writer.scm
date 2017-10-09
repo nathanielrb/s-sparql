@@ -16,7 +16,7 @@
           (cadr pair)))
 
 (define (expand-namespace ns-pair #!optional (namespaces (*namespaces*)))
-  (if (or (sparql-variable? ns-pair)  (s-iri? ns-pair))
+  (if (or (sparql-variable? ns-pair)  (s-iri? ns-pair) (blank-node? ns-pair))
       ns-pair
       (let ((pair (string-split (->string ns-pair) ":")))
         (if (equal? (length pair) 2)
