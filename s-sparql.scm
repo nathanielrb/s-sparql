@@ -87,6 +87,7 @@
            (symbol? (car obj))
            (equal? (car obj) '@Blank))
       (and (symbol? obj)
+	   (not (sparql-variable? obj))
 	   (let ((s (symbol->string obj)))
 	     (and (> (string-length s) 2)
 		  (equal? "_:" (substring (->string obj) 0 2)))))))
