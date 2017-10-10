@@ -87,7 +87,9 @@
            (symbol? (car obj))
            (equal? (car obj) '@Blank))
       (and (symbol? obj)
-           (equal? "_:" (substring (->string obj) 0 2)))))
+	   (let ((s (symbol->string obj)))
+	     (and (> (string-length s) 2)
+		  (equal? "_:" (substring (->string obj) 0 2)))))))
 
 (define (blank-node-path? obj)
   (and (list? obj)
