@@ -828,7 +828,7 @@
 
 (define ConditionalOrExpression
   (->node-if
-   '||
+   '|\||
    (concatenation 
     ConditionalAndExpression
     (repetition
@@ -943,11 +943,12 @@
 (define PathNegatedPropertySet
   (alternatives
    PathOneInPropertySet
-   (->list
+   (->node
+    `|@()|
     (concatenation
      (drop-consumed (lit/sp "("))
      (->node-if
-      '||
+      '|\||
       (concatenation 
        PathOneInPropertySet
        (repetition
@@ -966,7 +967,8 @@
      (concatenation 
       (drop-consumed (char-list/:s "!"))
       PathNegatedPropertySet))
-    (->list
+    (->node
+    `|@()|
      (concatenation
       (drop-consumed (lit/sp "("))
       Path
@@ -1006,7 +1008,7 @@
 
 (define PathAlternative
   (->node-if
-   '||
+   '|\||
    (concatenation 
     PathSequence
     (repetition

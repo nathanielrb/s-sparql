@@ -46,35 +46,49 @@
 
 (define (write-sparql-inverse-element exp)
   (and (inverse-element? exp)
-       (format "~A~A" (car exp) (sparql->string (cadr exp)))))
+       (format "~A~A" (car exp) (write-sparql-path (cadr exp)))))
 
 (define (write-sparql-element-path exp)
   (and (element-path? exp)
-       (format "~A/~A" 
-               (sparql->string (cadr exp))
-               (sparql->string (caddr exp)))))
+       (string-join
+        (map write-sparql-path (cdr exp))
+        "/")))
 
 (define (write-sparql-modified-path exp)
   (and (modified-path? exp)
-       (format "~A~A" (sparql->string (cadr exp)) (car exp))))
+       (format "~A~A" (write-sparql-path (cadr exp)) (car exp))))
 
 (define (write-sparql-negated-set exp)
   (and (negated-set? exp)
-       (format "!~A" (sparql->string (cadr exp)))))
+       (format "!~A" (write-sparql-path (cadr exp)))))
 
 (define (write-sparql-alternative-path exp)
   (and (alternative-path? exp)
        (string-join
-        (map write-sparql (cdr exp))
+        (map write-sparql-path (cdr exp))
         "|")))
+
+(define (write-sparql-zero-one-more-path exp)
+  (and (or (zero-or-more-path? exp)
+           (one-or-more-path? exp)
+           (zero-or-one-path? exp))
+       (format "~A~A"  
+               (write-sparql-path (second exp)) 
+               (car exp))))
+
+(define (write-sparql-group-path exp)
+  (and (group-path? exp)
+       (format "(~A)" (string-join (map write-sparql-path (cdr exp))))))
 
 (define (write-sparql-path exp)
   (or
+   (write-sparql-value exp)
    (write-sparql-element-path exp)
    (write-sparql-modified-path exp)
    (write-sparql-inverse-element exp)
    (write-sparql-negated-set exp)
-   (write-sparql-alternative-path exp)))
+   (write-sparql-alternative-path exp)
+   (write-sparql-group-path exp)))
 
 (define (write-sparql-value exp)
   (cond ((string? exp) (conc "\"" exp "\""))
@@ -82,8 +96,7 @@
         ((number? exp) (number->string exp))
         ((symbol? exp) (symbol->string exp))
         ((boolean? exp) (if exp "true" "false"))
-        ((pair? exp) (or (write-sparql-typed-literal exp)
-                         (write-sparql-path exp)))))
+        ((pair? exp) (write-sparql-typed-literal exp))))
 
 (define aggregates
   '(COUNT SUM MIN MAX AVG SAMPLE GROUP_CONCAT))
@@ -124,7 +137,7 @@
              (format "~A ~A"
                      (write-triple-properties (car property))
                      (write-triple-objects (cadr property))))))
-  (or (write-sparql-path exp)                         
+  (or (write-sparql-path exp)                     
       (if (pair? exp)
           (string-join (map W exp) ";  ")
           (sparql->string exp)))))
@@ -337,7 +350,7 @@
             ((op . rest)
              (values (string-join
                       (map (compose swrite list) rest)
-                      (format " ~A "(symbol->string op)))
+                      (format "~A"(symbol->string op)))
                      bindings)))))
     (,binary-operators
      . ,(lambda (block bindings)

@@ -98,7 +98,7 @@
 
 (define (alternative-path? obj)
   (and (pair? obj)
-       (equal? (car obj) '||)))
+       (equal? (car obj) '|\||)))
 
 (define (zero-or-more-path? obj)
   (and (pair? obj)
@@ -120,6 +120,10 @@
   (and (pair? obj)
        (equal? (car obj) '!)))
 
+(define (group-path? obj)
+  (and (pair? obj)
+       (equal? (car obj) '|@()|)))
+
 (define (property-path? obj)
   (or (inverse-path? obj)
       (sequence-path? obj)
@@ -127,7 +131,8 @@
       (zero-or-more-path? obj)
       (one-or-more-path? obj)
       (zero-or-one-path? obj)
-      (negated-set? obj)))
+      (negated-set? obj)
+      (group-path? obj)))
 
 (define (iri? obj)
   (and (symbol? obj)
