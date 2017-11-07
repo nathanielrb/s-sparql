@@ -935,7 +935,7 @@
    (lit/sym "a")
    (->list
     (concatenation
-     (lit/sp "^")
+     (lit/sym "^")
      (alternatives
       iri
       (lit/sym "a"))))))
