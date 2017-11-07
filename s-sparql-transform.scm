@@ -1,7 +1,3 @@
-;;(module s-sparql-transform *
-;;(import chicken scheme extras data-structures srfi-1) 
-;; (use matchable s-sparql)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Expand triples
 (define (expand-sequence-path-triple triple)
@@ -16,6 +12,28 @@
                 (let ((object (new-blank-node)))
                   (append (expand-triple (list s (car ps) object))
                           (loop object (cdr ps))))))))))
+
+(define (expand-alternative-path-triple triple)
+  (and (= (length triple) 3)
+       (alternative-path? (cadr triple))
+       (match triple
+         ((s (`|\|| . ps) o)
+          `((UNION
+             ,@(map (lambda (p)
+                      (expand-triple (list s p o)))
+                    ps)))))))
+
+(define (expand-negated-set-triple triple)
+  (and (= (length triple) 3)
+       (negated-set? (cadr triple))
+       (match triple
+         ((s (`! (`|@()| (`|\|| . ps))) o)
+          (map (lambda (p)
+                 (join (expand-triple `(,s (! ,p) ,o))))
+               ps))
+         ((s (`! (`^ p)) o)
+          `((,o (! ,p) ,s)))
+         (else (list triple)))))
 
 (define (expand-blank-node-path triple)
   (cond ((blank-node-path? (car triple))
@@ -32,12 +50,12 @@
         (else #f)))
 
 (define (expand-expanded-triple s p o)
-  (cond  ((blank-node-path? o)
-          (expand-blank-node-path (list s p o)))
-         ((sequence-path? p)
-          (expand-sequence-path-triple (list s p o)))
-         (else
-          (list (list s p o)))))
+  (let ((triple (list s p o)))
+    (or (expand-blank-node-path triple)
+        (expand-sequence-path-triple triple)
+        (expand-alternative-path-triple triple)
+        (expand-negated-set-triple triple)
+        (list triple))))
 
 (define (expand-triple triple)
   (or (expand-blank-node-path triple)
