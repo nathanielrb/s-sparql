@@ -65,7 +65,9 @@
   (*namespaces* (cons (list name namespace) (*namespaces*))))
 
 (define (lookup-namespace name #!optional (namespaces (*namespaces*)))
-  (car (alist-ref name namespaces)))
+  (let ((ns (alist-ref name namespaces)))
+    (if ns (car ns)
+        (abort (format "Unknown namespace: ~A" name)))))
 
 (define-syntax define-namespace
   (syntax-rules ()
