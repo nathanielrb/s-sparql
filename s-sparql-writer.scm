@@ -374,7 +374,7 @@
                 bindings))))))
     ((VALUES)
      . ,(lambda (block bindings)
-          (let ((F (lambda (els) (string-join (map ->string els)))))
+          (let ((F (lambda (els) (string-join (map sparql->string els)))))
             (match block
                    ((`VALUES vars . vals)
                     (values

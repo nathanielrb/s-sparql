@@ -393,11 +393,12 @@
 	(values statements bindings)
 	(let-values (((new-statements updated-bindings)
 		      (apply-rules (car blocks) bindings rules
-                                   (make-context
-                                    (car blocks) 
-                                    visited-blocks
-                                    (cdr blocks) 
-                                    (make-parent-context (*context*))))))
+                                   ;; (make-context
+                                   ;;  (car blocks) 
+                                   ;;  visited-blocks
+                                   ;;  (cdr blocks) 
+                                   ;;  (make-parent-context (*context*))))))
+                                   )))
 	  (loop (cdr blocks)
 		(kappend statements new-statements)
 		updated-bindings
@@ -406,7 +407,7 @@
 (define (rewrite blocks #!optional (bindings '()) (rules (*rules*)))
   (rewrite* blocks bindings rules append '()))
 
-(define (apply-rules block bindings rules context)
+(define (apply-rules block bindings rules) ; context)
   (let ((rule-match? (lambda (rule)
                        (or (and (symbol? rule) (equal? rule block))
                            (and (pair? rule) (member (car block) rule))
@@ -416,8 +417,7 @@
           (match (car remaining-rules)
             ((rule . proc) 
              (if (rule-match? rule)
-                 (parameterize ((*context* context)
-                                (*rules* rules))
+                 (parameterize ((*rules* rules)) ; (*context* context)
                    (proc block bindings))
                  (loop (cdr remaining-rules)))))))))
 
