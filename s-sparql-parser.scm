@@ -12,6 +12,8 @@
 ;; Parameters
 ;; *sparql-number-parser* - defaults to string->symbol, can also use string->number
 
+(use matchable)
+
 (require-extension utf8 utf8-srfi-14
                    typeclass input-classes abnf abnf-charlist abnf-consumers
                    lexgen)
@@ -47,21 +49,31 @@
   (syntax-rules ()
     ((_ fn) (lambda args (apply fn args)))))
 
-(define fws
-  (concatenation
-   (optional-sequence 
-    (concatenation
-     (repetition char-list/wsp)
-     (drop-consumed 
-      (alternatives char-list/crlf char-list/lf char-list/cr))))
-   (optional-sequence
-    (repetition char-list/wsp))))
+;; (define fws
+;;   (concatenation
+;;    (optional-sequence 
+;;     (concatenation
+;;      (repetition char-list/wsp)
+;;      (drop-consumed 
+;;       (alternatives char-list/crlf char-list/lf char-list/cr))))
+;;    (optional-sequence
+;;     (repetition char-list/wsp))))
+
+;; (define (between-fws p)
+;;   (concatenation
+;;    (optional-sequence (drop-consumed fws)) 
+;;    p
+;;    (optional-sequence (drop-consumed fws)) ))
+
+(define ws 
+  (repetition1
+   (alternatives char-list/crlf char-list/lf char-list/cr char-list/wsp)))
 
 (define (between-fws p)
   (concatenation
-   (optional-sequence (drop-consumed fws)) 
+   (optional-sequence (drop-consumed ws))
    p
-   (optional-sequence (drop-consumed fws)) ))
+   (optional-sequence (drop-consumed ws))))
 
 (define (err s)
   (print "lexical error on stream: " s)
@@ -330,7 +342,7 @@
   (->node
    '@Blank
    (concatenation (drop-consumed (lit/sp "["))
-                  (drop-consumed (optional-sequence fws))
+                  (drop-consumed (optional-sequence ws))
                   (drop-consumed (lit/sp "]")))))
 
 (define WS
