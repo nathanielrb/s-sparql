@@ -140,7 +140,7 @@
           (let ((lang (alist-ref 'xml:lang bindings)))
             (cons var
                   (if lang
-                      (conc value "@" lang) 
+                      (cons value (string->symbol (conc "@" lang)))
                       value))))
          ("typed-literal"
           (let ((datatype (alist-ref 'datatype bindings)))
