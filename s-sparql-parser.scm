@@ -363,7 +363,7 @@
 
 (define STRING_LITERAL_LONG2
   (concatenation
-   (char-list/:s "\"\"\"")
+   (drop-consumed (char-list/:s "\"\"\""))
    (repetition
     (concatenation
      (optional-sequence
@@ -375,11 +375,11 @@
        (char-set-complement
         (string->char-set "\"\\")))
       ECHAR)))
-   (char-list/:s "\"\"\"")))
+   (drop-consumed (char-list/:s "\"\"\""))))
 
 (define STRING_LITERAL_LONG1
   (concatenation
-   (char-list/:s "'''")
+   (drop-consumed (char-list/:s "'''"))
    (repetition
     (concatenation
      (optional-sequence
@@ -391,7 +391,7 @@
        (char-set-complement
         (string->char-set "\"\\")))
       ECHAR)))
-   (lit/sp "'''")))
+   (drop-consumed (lit/sp "'''"))))
 
 (define STRING_LITERAL2
   (concatenation
@@ -407,7 +407,7 @@
 
 (define STRING_LITERAL1
   (concatenation
-   (char-list/:s "'")
+   (drop-consumed (char-list/:s "'"))
    (repetition
     (alternatives
      (set 
@@ -415,7 +415,7 @@
        (list->char-set
         (list #\' #\\ #\newline #\return))))
      ECHAR))
-   (char-list/:s "'")))
+   (drop-consumed (char-list/:s "'"))))
 
 (define EXPONENT
   (concatenation
